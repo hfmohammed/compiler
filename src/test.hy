@@ -1,2 +1,1 @@
-let x = 10;
-exit(x);
+exit(7);
