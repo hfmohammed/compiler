@@ -31,21 +31,21 @@ int main(int argc, char* argv[]) {
     std::vector<Token> tokens = tokenizer.tokenize();
     
     Parser parser(std::move(tokens));
-    std::optional<node::NodeExit> tree = parser.parse();
+    std::optional<NodeProg> tree = parser.parse_prog();
 
     if (!tree.has_value()) {
-        std::cerr << "No exit statement found" << std::endl;
+        std::cerr << "Invalid Program" << std::endl;
         exit(EXIT_FAILURE);
     }
 
     Generator generator(tree.value());
-
     {
         std::ofstream ofile("test.asm");
         if (!ofile) {
             std::cerr << "File not found" << std::endl;
+            exit(EXIT_FAILURE);
         }
-        ofile << generator.generate();
+        ofile << generator.gen_prog();
     }
 
     if (system("nasm -felf64 test.asm -o test.o") != 0)

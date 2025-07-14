@@ -4,7 +4,12 @@
 enum class TokenType {
     _exit,
     int_lit,
-    semi
+    semi,
+    open_paren,
+    closed_paren,
+    identifier,
+    let,
+    eq,
 };
 
 struct Token {
@@ -30,12 +35,15 @@ class Tokenizer {
                 if (std::isalpha(peek().value())) {
                     buffer.push_back(consume());
 
-                    while (peek().has_value() && std::isalnum(peek().has_value())) {
+                    while (peek().has_value() && std::isalnum(peek().value())) {
                         buffer.push_back(consume());
                     }
 
                     if (buffer == "exit") {
                         tokens.push_back(Token{ .type = TokenType::_exit });
+                        buffer.clear();
+                    } else {
+                        tokens.push_back(Token{ .type = TokenType::identifier, .value = buffer });
                         buffer.clear();
                     }
 
@@ -48,19 +56,32 @@ class Tokenizer {
                     tokens.push_back(Token{ .type = TokenType::int_lit, .value = buffer });
                     buffer.clear();
 
+                } else if (peek().has_value() && peek().value() == '(') {
+                    consume();
+                    tokens.push_back(Token{ .type = TokenType::open_paren });
+                    
+                } else if (peek().has_value() && peek().value() == ')') {
+                    consume();
+                    tokens.push_back(Token{ .type = TokenType::closed_paren });
+                    
+                } else if (peek().has_value() && peek().value() == '=') {
+                    consume();
+                    tokens.push_back(Token{ .type = TokenType::eq });
+
                 } else if (peek().has_value() && peek().value() == ';') {
                     consume();
                     tokens.push_back(Token{ .type = TokenType::semi });
 
                 } else if (peek().has_value() && std::isspace(peek().value())) {
                     consume();
-                    continue;
-                } else {
+
+                }
+
+                else {
                     std::cerr << "Error" << std::endl;
                 }
             }
 
-            std::cout << tokens.size() << std::endl;
             return tokens;
         }
 
