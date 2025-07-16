@@ -7,9 +7,11 @@ enum class TokenType {
     semi,
     open_paren,
     closed_paren,
-    identifier,
+    ident,
     let,
     eq,
+    plus,
+    multi,
 };
 
 struct Token {
@@ -42,9 +44,15 @@ class Tokenizer {
                     if (buffer == "exit") {
                         tokens.push_back(Token{ .type = TokenType::_exit });
                         buffer.clear();
-                    } else {
-                        tokens.push_back(Token{ .type = TokenType::identifier, .value = buffer });
+
+                    } else if (buffer == "let") {
+                        tokens.push_back(Token{ .type = TokenType::let });
                         buffer.clear();
+
+                    } else {
+                        tokens.push_back(Token{ .type = TokenType::ident, .value = buffer });
+                        buffer.clear();
+
                     }
 
                 } else if (peek().has_value() && std::isdigit(peek().value())) {
@@ -68,6 +76,14 @@ class Tokenizer {
                     consume();
                     tokens.push_back(Token{ .type = TokenType::eq });
 
+                } else if (peek().has_value() && peek().value() == '+') {
+                    consume();
+                    tokens.push_back(Token{ .type = TokenType::plus });
+
+                } else if (peek().has_value() && peek().value() == '-') {
+                    consume();
+                    tokens.push_back(Token{ .type = TokenType::multi });
+
                 } else if (peek().has_value() && peek().value() == ';') {
                     consume();
                     tokens.push_back(Token{ .type = TokenType::semi });
@@ -82,6 +98,7 @@ class Tokenizer {
                 }
             }
 
+            std::cout << tokens.size() << std::endl;
             return tokens;
         }
 
