@@ -13,7 +13,9 @@ enum class TokenType {
     plus,
     star,
     minus,
-    div
+    div,
+    open_curly,
+    closed_curly,
 };
 
 std::optional<int> bin_prec(TokenType type) {
@@ -111,6 +113,14 @@ class Tokenizer {
                 } else if (peek().has_value() && peek().value() == ';') {
                     consume();
                     tokens.push_back(Token{ .type = TokenType::semi });
+
+                } else if (peek().has_value() && peek().value() == '{') {
+                    consume();
+                    tokens.push_back(Token{ .type = TokenType::open_curly });
+
+                } else if (peek().has_value() && peek().value() == '}') {
+                    consume();
+                    tokens.push_back(Token{ .type = TokenType::closed_curly });
 
                 } else if (peek().has_value() && std::isspace(peek().value())) {
                     consume();
