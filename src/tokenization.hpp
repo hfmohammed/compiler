@@ -11,8 +11,25 @@ enum class TokenType {
     let,
     eq,
     plus,
-    multi,
+    star,
+    minus,
+    div
 };
+
+std::optional<int> bin_prec(TokenType type) {
+    switch (type) {
+    case TokenType::plus:
+    case TokenType::minus:
+        return 0;
+
+    case TokenType::star:
+    case TokenType::div:
+        return 1;
+
+    default:
+        return {};
+    }
+}
 
 struct Token {
     TokenType type;
@@ -33,7 +50,6 @@ class Tokenizer {
             std::string buffer;
 
             while (peek().has_value()) {
-
                 if (std::isalpha(peek().value())) {
                     buffer.push_back(consume());
 
@@ -82,7 +98,15 @@ class Tokenizer {
 
                 } else if (peek().has_value() && peek().value() == '-') {
                     consume();
-                    tokens.push_back(Token{ .type = TokenType::multi });
+                    tokens.push_back(Token{ .type = TokenType::minus });
+
+                } else if (peek().has_value() && peek().value() == '*') {
+                    consume();
+                    tokens.push_back(Token{ .type = TokenType::star });
+
+                } else if (peek().has_value() && peek().value() == '/') {
+                    consume();
+                    tokens.push_back(Token{ .type = TokenType::div });
 
                 } else if (peek().has_value() && peek().value() == ';') {
                     consume();
@@ -91,10 +115,9 @@ class Tokenizer {
                 } else if (peek().has_value() && std::isspace(peek().value())) {
                     consume();
 
-                }
-
-                else {
+                } else {
                     std::cerr << "Error" << std::endl;
+                    exit(EXIT_FAILURE);
                 }
             }
 
