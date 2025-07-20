@@ -70,7 +70,7 @@ struct NodeStmtLet {
 };
 
 struct NodeStmt {
-    std::variant<NodeStmtExit*,NodeStmtLet*,> var;
+    std::variant<NodeStmtExit*,NodeStmtLet*> var;
 };
 
 struct NodeProg {
