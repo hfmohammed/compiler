@@ -1,6 +1,13 @@
-let x = 2;
-if (x - 1) {
-    let z = 255;
+let x = 1;
+// hey hello
+
+if (x) {
+    let z = 254;
     exit(z);
+} elif (x) {
+    exit(68);
+} else {
+    exit(67);
 }
+
 exit(x);
