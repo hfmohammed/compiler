@@ -18,6 +18,7 @@ enum class TokenType {
     closed_curly,
     _if,
     _else,
+    elif,
 };
 
 std::optional<int> bin_prec(TokenType type) {
@@ -72,6 +73,10 @@ class Tokenizer {
                     } else if (buffer == "if") {
                         tokens.push_back(Token{ .type = TokenType::_if });
                         buffer.clear();
+
+                    } else if (buffer == "elif") {
+                        tokens.push_back(Token{ .type = TokenType::elif });
+                        buffer.clear();
                     
                     } else if (buffer == "else") {
                         tokens.push_back(Token{ .type = TokenType::_else });
@@ -91,6 +96,31 @@ class Tokenizer {
                     int _value = stoi(buffer);
                     tokens.push_back(Token{ .type = TokenType::int_lit, .value = buffer });
                     buffer.clear();
+
+                } else if (peek().has_value() && peek().value() == '/' && peek(1).has_value() && peek(1).value() == '/') {
+                    consume();
+                    consume();
+                    while (peek().has_value() && peek().value() != '\n') {
+                        consume();
+                    }
+
+                } else if (peek().has_value() && peek().value() == '/' && peek(1).has_value() && peek(1).value() == '*') {
+                    while (peek().has_value()) {
+                        if (peek().value() == '*' && peek(1).has_value() && peek(1).value() == '/') {
+                            break;
+                        }
+                        
+                        std::cout << "consume" << std::endl;
+                        std::cout << consume() << std::endl;
+                    }
+
+                    if (peek().has_value()) {
+                        consume();
+                    }
+
+                    if (peek().has_value()) {
+                        consume();
+                    }
 
                 } else if (peek().has_value() && peek().value() == '(') {
                     consume();

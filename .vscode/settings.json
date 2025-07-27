@@ -101,6 +101,12 @@
     "streambuf": "cpp",
     "typeinfo": "cpp",
     "variant": "cpp",
-    "map": "cpp"
+    "map": "cpp",
+    "compare": "cpp",
+    "concepts": "cpp",
+    "cstring": "cpp",
+    "ctime": "cpp",
+    "numbers": "cpp",
+    "cinttypes": "cpp"
   }
 }
