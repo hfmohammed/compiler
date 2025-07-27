@@ -2,7 +2,7 @@
 
 compile:
 	@echo "Compiling main.cpp..."
-	g++ -std=c++17 src/main.cpp -o main
+	g++-11 -std=c++20 src/main.cpp -o main
 
 link: main src/test.hy
 	@echo "Running compiler on test.hy..."

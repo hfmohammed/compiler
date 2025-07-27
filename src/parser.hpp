@@ -69,8 +69,19 @@ struct NodeStmtLet {
     NodeExpr* expr;
 };
 
+struct NodeStmt;
+
+struct NodeScope {
+    std::vector<NodeStmt*> stmts;
+};
+
+struct NodeStmtIf {
+    NodeExpr* expr;
+    NodeScope* scope;
+};
+
 struct NodeStmt {
-    std::variant<NodeStmtExit*,NodeStmtLet*> var;
+    std::variant<NodeStmtExit*, NodeStmtLet*, NodeScope*, NodeStmtIf*> var;
 };
 
 struct NodeProg {
@@ -181,7 +192,7 @@ class Parser {
                     multi->rhs = expr_rhs.value();
                     expr->var = multi;
 
-                } else if (op.type == TokenType::div) {
+                } else if (op.type == TokenType::fslash) {
                     auto div = m_allocator.alloc<NodeBinExprDiv>();
                     expr_2->var = expr_lhs->var;
 
@@ -198,6 +209,20 @@ class Parser {
             return expr_lhs;
         }
 
+
+        inline std::optional<NodeScope*> parse_scope() {
+            if (!try_consume(TokenType::open_curly).has_value()) {
+                return {};
+            }
+
+            auto node_scope = m_allocator.alloc<NodeScope>();
+            while (auto stmt = parse_stmt()) {
+                node_scope->stmts.push_back(stmt.value());
+            }
+            try_consume(TokenType::closed_curly, "Expected `}`");
+
+            return node_scope;
+        }
 
         inline std::optional<NodeStmt*> parse_stmt() {
 
@@ -240,6 +265,40 @@ class Parser {
                 auto node_stmt = m_allocator.alloc<NodeStmt>();
                 node_stmt->var = node_stmt_let;
                 return node_stmt;
+
+            } else if (peek().has_value() && peek().value().type == TokenType::open_curly) {
+                if (auto node_scope = parse_scope()) {
+                    auto node_stmt = m_allocator.alloc<NodeStmt>();
+                    node_stmt->var = node_scope.value();
+                    return node_stmt;
+                } else {
+                    std::cerr << "Invalid scope" << std::endl;
+                    exit(EXIT_FAILURE);
+                }
+
+            } else if (auto _if = try_consume(TokenType::_if)) { 
+                try_consume(TokenType::open_paren, "Expected `(`");
+
+                auto stmt_if = m_allocator.alloc<NodeStmtIf>();
+                if (auto expr = parse_expr()) {
+                    stmt_if->expr = expr.value();
+                } else {
+                    std::cerr << "Invalid expression" << std::endl;
+                    exit(EXIT_FAILURE);
+                }
+
+                try_consume(TokenType::closed_paren, "Expected `)`");
+
+                if (auto scope = parse_scope()) {
+                    stmt_if->scope = scope.value();
+                } else {
+                    std::cerr << "Invalid scope" << std::endl;
+                    exit(EXIT_FAILURE);
+                }
+
+                auto stmt = m_allocator.alloc<NodeStmt>();
+                stmt->var = stmt_if;
+                return stmt;
 
             } else {
                 std::cout << std::to_string(static_cast<int>(peek().value().type)) << std::endl;

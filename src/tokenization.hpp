@@ -13,9 +13,11 @@ enum class TokenType {
     plus,
     star,
     minus,
-    div,
+    fslash,
     open_curly,
     closed_curly,
+    _if,
+    _else,
 };
 
 std::optional<int> bin_prec(TokenType type) {
@@ -25,7 +27,7 @@ std::optional<int> bin_prec(TokenType type) {
         return 0;
 
     case TokenType::star:
-    case TokenType::div:
+    case TokenType::fslash:
         return 1;
 
     default:
@@ -65,6 +67,14 @@ class Tokenizer {
 
                     } else if (buffer == "let") {
                         tokens.push_back(Token{ .type = TokenType::let });
+                        buffer.clear();
+
+                    } else if (buffer == "if") {
+                        tokens.push_back(Token{ .type = TokenType::_if });
+                        buffer.clear();
+                    
+                    } else if (buffer == "else") {
+                        tokens.push_back(Token{ .type = TokenType::_else });
                         buffer.clear();
 
                     } else {
@@ -108,7 +118,7 @@ class Tokenizer {
 
                 } else if (peek().has_value() && peek().value() == '/') {
                     consume();
-                    tokens.push_back(Token{ .type = TokenType::div });
+                    tokens.push_back(Token{ .type = TokenType::fslash });
 
                 } else if (peek().has_value() && peek().value() == ';') {
                     consume();
