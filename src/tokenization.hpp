@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include <cassert>
 
 enum class TokenType {
     _exit,
@@ -21,6 +22,63 @@ enum class TokenType {
     elif,
 };
 
+inline std::string to_string(const TokenType type) {
+    switch (type) {
+    case TokenType::_exit:
+        return "`exit`";
+
+    case TokenType::int_lit:
+        return "int literal";
+
+    case TokenType::semi:
+        return "`;`";
+
+    case TokenType::open_paren:
+        return "`(`";
+
+    case TokenType::closed_paren:
+        return "`)`";
+
+    case TokenType::ident:
+        return "identifier";
+
+    case TokenType::let:
+        return "`let`";
+
+    case TokenType::eq:
+        return "`=`";
+
+    case TokenType::plus:
+        return "`+`";
+
+    case TokenType::star:
+        return "`*`";
+
+    case TokenType::minus:
+        return "`-`";
+
+    case TokenType::fslash:
+        return "`/`";
+
+    case TokenType::open_curly:
+        return "`{`";
+
+    case TokenType::closed_curly:
+        return "`}`";
+
+    case TokenType::_if:
+        return "`if`";
+
+    case TokenType::_else:
+        return "`else`";
+
+    case TokenType::elif:
+        return "`elif`";
+    }
+
+    assert(false);
+}
+
 std::optional<int> bin_prec(TokenType type) {
     switch (type) {
     case TokenType::plus:
@@ -38,7 +96,9 @@ std::optional<int> bin_prec(TokenType type) {
 
 struct Token {
     TokenType type;
+    int line;
     std::optional<std::string> value;
+
 };
 
 class Tokenizer {
@@ -53,6 +113,7 @@ class Tokenizer {
         inline std::vector<Token> tokenize() {
             std::vector<Token> tokens;
             std::string buffer;
+            int line_count = 1;
 
             while (peek().has_value()) {
                 if (std::isalpha(peek().value())) {
@@ -63,27 +124,27 @@ class Tokenizer {
                     }
 
                     if (buffer == "exit") {
-                        tokens.push_back(Token{ .type = TokenType::_exit });
+                        tokens.push_back(Token{ .type = TokenType::_exit, .line = line_count });
                         buffer.clear();
 
                     } else if (buffer == "let") {
-                        tokens.push_back(Token{ .type = TokenType::let });
+                        tokens.push_back(Token{ .type = TokenType::let, .line = line_count });
                         buffer.clear();
 
                     } else if (buffer == "if") {
-                        tokens.push_back(Token{ .type = TokenType::_if });
+                        tokens.push_back(Token{ .type = TokenType::_if, .line = line_count });
                         buffer.clear();
 
                     } else if (buffer == "elif") {
-                        tokens.push_back(Token{ .type = TokenType::elif });
+                        tokens.push_back(Token{ .type = TokenType::elif, .line = line_count });
                         buffer.clear();
                     
                     } else if (buffer == "else") {
-                        tokens.push_back(Token{ .type = TokenType::_else });
+                        tokens.push_back(Token{ .type = TokenType::_else, .line = line_count });
                         buffer.clear();
 
                     } else {
-                        tokens.push_back(Token{ .type = TokenType::ident, .value = buffer });
+                        tokens.push_back(Token{ .type = TokenType::ident, .line = line_count, .value = buffer });
                         buffer.clear();
 
                     }
@@ -94,7 +155,7 @@ class Tokenizer {
                     }
 
                     int _value = stoi(buffer);
-                    tokens.push_back(Token{ .type = TokenType::int_lit, .value = buffer });
+                    tokens.push_back(Token{ .type = TokenType::int_lit, .line = line_count, .value = buffer });
                     buffer.clear();
 
                 } else if (peek().has_value() && peek().value() == '/' && peek(1).has_value() && peek(1).value() == '/') {
@@ -124,49 +185,53 @@ class Tokenizer {
 
                 } else if (peek().has_value() && peek().value() == '(') {
                     consume();
-                    tokens.push_back(Token{ .type = TokenType::open_paren });
+                    tokens.push_back(Token{ .type = TokenType::open_paren, .line = line_count });
                     
                 } else if (peek().has_value() && peek().value() == ')') {
                     consume();
-                    tokens.push_back(Token{ .type = TokenType::closed_paren });
+                    tokens.push_back(Token{ .type = TokenType::closed_paren, .line = line_count });
                     
                 } else if (peek().has_value() && peek().value() == '=') {
                     consume();
-                    tokens.push_back(Token{ .type = TokenType::eq });
+                    tokens.push_back(Token{ .type = TokenType::eq, .line = line_count });
 
                 } else if (peek().has_value() && peek().value() == '+') {
                     consume();
-                    tokens.push_back(Token{ .type = TokenType::plus });
+                    tokens.push_back(Token{ .type = TokenType::plus, .line = line_count });
 
                 } else if (peek().has_value() && peek().value() == '-') {
                     consume();
-                    tokens.push_back(Token{ .type = TokenType::minus });
+                    tokens.push_back(Token{ .type = TokenType::minus, .line = line_count });
 
                 } else if (peek().has_value() && peek().value() == '*') {
                     consume();
-                    tokens.push_back(Token{ .type = TokenType::star });
+                    tokens.push_back(Token{ .type = TokenType::star, .line = line_count });
 
                 } else if (peek().has_value() && peek().value() == '/') {
                     consume();
-                    tokens.push_back(Token{ .type = TokenType::fslash });
+                    tokens.push_back(Token{ .type = TokenType::fslash, .line = line_count });
 
                 } else if (peek().has_value() && peek().value() == ';') {
                     consume();
-                    tokens.push_back(Token{ .type = TokenType::semi });
+                    tokens.push_back(Token{ .type = TokenType::semi, .line = line_count });
 
                 } else if (peek().has_value() && peek().value() == '{') {
                     consume();
-                    tokens.push_back(Token{ .type = TokenType::open_curly });
+                    tokens.push_back(Token{ .type = TokenType::open_curly, .line = line_count });
 
                 } else if (peek().has_value() && peek().value() == '}') {
                     consume();
-                    tokens.push_back(Token{ .type = TokenType::closed_curly });
+                    tokens.push_back(Token{ .type = TokenType::closed_curly, .line = line_count });
+
+                } else if (peek().has_value() && peek().value() == '\n') {
+                    line_count++;
+                    consume();
 
                 } else if (peek().has_value() && std::isspace(peek().value())) {
                     consume();
 
                 } else {
-                    std::cerr << "Error" << std::endl;
+                    std::cerr << "Invalid token" << std::endl;
                     exit(EXIT_FAILURE);
                 }
             }
