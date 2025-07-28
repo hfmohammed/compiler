@@ -185,6 +185,21 @@ class Generator {
                     gen.gen_expr(stmt_let->expr);
                 }
 
+                void operator()(const NodeStmtAssign* stmt_assign) const {
+                    const auto it = std::ranges::find_if(gen.m_vars.begin(), gen.m_vars.end(), [stmt_assign](const Var& var) {
+                        return var.name == stmt_assign->ident.value.value();
+                    });
+
+                    if (it == gen.m_vars.end()) {
+                        std::cerr << "Undeclared identifier " << stmt_assign->ident.value.value() << std::endl;
+                        exit(EXIT_FAILURE);
+                    }
+
+                    gen.gen_expr(stmt_assign->expr);
+                    gen.pop("rax");
+                    gen.m_output << "    mov [rsp +" << (gen.m_stack_size - it->stack_loc - 1) * 8 << "], rax\n";
+                }
+
                 void operator()(const NodeScope* stmt_scope) {
                     gen.gen_scope(stmt_scope);
                 }
@@ -192,19 +207,25 @@ class Generator {
                 void operator()(const NodeStmtIf* stmt_if) {
                     gen.gen_expr(stmt_if->expr);
                     gen.pop("rax");
-                    std::string label = gen.create_label();
+                    const std::string label = gen.create_label();
 
                     gen.m_output << "    test rax, rax\n";
                     gen.m_output << "    jz " << label << "\n";
                     
                     gen.gen_scope(stmt_if->scope);
+
+                    std::optional<std::string> end_label;
+                    if (stmt_if->pred.has_value()) {
+                        end_label = gen.create_label();
+                        gen.m_output << "    jmp " << end_label.value() << "\n";
+                    }
                     gen.m_output << label << ":\n";
 
                     if (stmt_if->pred.has_value()) {
-                        const std::string end_label = gen.create_label();
-                        gen.gen_if_pred(stmt_if->pred.value(), end_label);
-                        gen.m_output << end_label << ":\n";
+                        gen.gen_if_pred(stmt_if->pred.value(), end_label.value());
+                        gen.m_output << end_label.value() << ":\n";
                     }
+                    gen.m_output << "    ; if\n";
                 }
             };
 

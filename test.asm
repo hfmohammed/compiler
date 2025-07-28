@@ -2,37 +2,37 @@ global _start
 _start:
     mov rax, 1
     push rax
-    push QWORD [rsp + 0]
+    mov rax, 0
+    push rax
     pop rax
     test rax, rax
     jz label0
-    mov rax, 254
+    mov rax, 1
     push rax
-    push QWORD [rsp + 0]
-    mov rax, 60
-    pop rdi
-    syscall
-    sub rsp, 8
+    pop rax
+    mov [rsp +0], rax
+    sub rsp, 0
+    jmp label1
 label0:
-    push QWORD [rsp + 0]
+    mov rax, 0
+    push rax
     pop rax
     test rax, rax
     jz label2
-    mov rax, 68
+    mov rax, 2
     push rax
-    mov rax, 60
-    pop rdi
-    syscall
+    pop rax
+    mov [rsp +0], rax
     sub rsp, 0
     jmp label1
 label2:
-    mov rax, 67
+    mov rax, 3
     push rax
-    mov rax, 60
-    pop rdi
-    syscall
+    pop rax
+    mov [rsp +0], rax
     sub rsp, 0
 label1:
+    ; if
     push QWORD [rsp + 0]
     mov rax, 60
     pop rdi
