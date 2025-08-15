@@ -14,6 +14,11 @@
     NodeProg => list of statements
 */
 
+struct NodeTermString {
+
+    Token _string;
+};
+
 struct NodeTermIntLit {
     Token int_lit;
 };
@@ -53,7 +58,7 @@ struct NodeBinExpr {
 };
 
 struct NodeTerm {
-    std::variant<NodeTermIntLit*, NodeTermIdent*, NodeTermParen*> var;
+    std::variant<NodeTermIntLit*, NodeTermString*, NodeTermIdent*, NodeTermParen*> var;
 };
 
 struct NodeExpr {
@@ -126,22 +131,32 @@ class Parser {
 
         std::optional<NodeTerm*> parse_term() {
             if (auto int_lit = try_consume(TokenType::int_lit)) {
+                // int literal
                 auto node_term_int_lit = m_allocator.alloc<NodeTermIntLit>();
                 node_term_int_lit->int_lit = int_lit.value();
 
                 auto term = m_allocator.alloc<NodeTerm>();
                 term->var = node_term_int_lit;
-
                 return term;
+            
+            } else if (auto _string = try_consume(TokenType::_string)) {
+                // string
+                auto node_term_string = m_allocator.alloc<NodeTermString>();
+                node_term_string->_string = _string.value();
 
+                auto term = m_allocator.alloc<NodeTerm>();
+                term->var = node_term_string;
+                return term;
+            
             } else if (auto ident = try_consume(TokenType::ident)) {
+
                 auto node_term_ident = m_allocator.alloc<NodeTermIdent>();
                 node_term_ident->ident = ident.value();
 
                 auto term = m_allocator.alloc<NodeTerm>();
                 term->var = node_term_ident;
-
                 return term;
+
             } else if (auto open_paren = try_consume(TokenType::open_paren)) {
                 auto expr = parse_expr();
                 if (!expr.has_value()) {
@@ -154,8 +169,8 @@ class Parser {
 
                 auto term = m_allocator.alloc<NodeTerm>();
                 term->var = term_paren;
-
                 return term;
+
             } else {
                 return {};
             }

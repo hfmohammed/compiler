@@ -1,12 +1,15 @@
 .PHONY: compile link run clean
 
+all: run
+	@echo "program ran"
+
 compile:
 	@echo "Compiling main.cpp..."
-	g++-11 -std=c++20 src/main.cpp -o main
+	g++-11 -std=c++20 src/main.cpp -o src/main.o
 
-link: main src/test.hy
+link: src/main.o src/test.hy
 	@echo "Running compiler on test.hy..."
-	./main src/test.hy
+	./main.o src/test.hy
 
 run: compile link
 	@echo "Running assembled binary..."
@@ -14,4 +17,4 @@ run: compile link
 	@$(MAKE) clean
 
 clean:
-	rm test test.o main
+	rm test test.o main.o

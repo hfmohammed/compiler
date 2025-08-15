@@ -1,12 +1,12 @@
-let x = 1;
+let x = "abc";
 // hey hello
 
-if (0 {
+if (x + -1) {
     x = 1;
-} elif (0) {
+} elif (x + -2) {
     x = 2;
 } else {
     x = 3;
-
+}
 
 exit(x);
