@@ -5,6 +5,7 @@
 enum class TokenType {
     _exit,
     int_lit,
+    _string,
     semi,
     open_paren,
     closed_paren,
@@ -18,8 +19,8 @@ enum class TokenType {
     open_curly,
     closed_curly,
     _if,
-    _else,
     elif,
+    _else,
 };
 
 inline std::string to_string(const TokenType type) {
@@ -69,11 +70,12 @@ inline std::string to_string(const TokenType type) {
     case TokenType::_if:
         return "`if`";
 
+    case TokenType::elif:
+        return "`elif`";
+
     case TokenType::_else:
         return "`else`";
 
-    case TokenType::elif:
-        return "`elif`";
     }
 
     assert(false);
@@ -149,13 +151,28 @@ class Tokenizer {
 
                     }
 
-                } else if (peek().has_value() && std::isdigit(peek().value())) {
+                } else if (peek().has_value() && std::isdigit(peek().value()) || (peek().has_value() && peek().value() == '-' && peek(1).has_value() && std::isdigit(peek(1).value()))) {
+                    if (peek().has_value() && peek().value() == '-') {
+                        buffer.push_back('-');
+                        consume();
+                    }
+
                     while (peek().has_value() && std::isdigit(peek().value())) {
                         buffer.push_back(consume());
                     }
 
                     int _value = stoi(buffer);
                     tokens.push_back(Token{ .type = TokenType::int_lit, .line = line_count, .value = buffer });
+                    buffer.clear();
+
+                } else if (peek().has_value() && peek().value() == '"') {
+                    consume();
+                    while (peek().has_value() && peek().value() != '"') {
+                        buffer.push_back(consume());
+                    }
+                    consume();
+
+                    tokens.push_back(Token{ .type = TokenType::_string, .line = line_count, .value = buffer });
                     buffer.clear();
 
                 } else if (peek().has_value() && peek().value() == '/' && peek(1).has_value() && peek(1).value() == '/') {

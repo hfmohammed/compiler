@@ -32,6 +32,10 @@ class Generator {
                     gen.push("rax");
                 }
 
+                void operator()(const NodeTermString* term_string) {
+                    ;
+                }
+
                 void operator()(const NodeTermIdent* term_ident) {
                     auto it = std::find_if(
                             gen.m_vars.cbegin(),
@@ -251,6 +255,12 @@ class Generator {
             size_t stack_loc;
         };
 
+        struct StringVar {
+            std::string label;
+            std::string value;
+            size_t stack_loc;
+        };
+
         void push(const std::string& reg) {
             m_output << "    push " << reg << "\n";
             m_stack_size++;
@@ -288,5 +298,9 @@ class Generator {
         size_t m_stack_size = 0;
         std::vector<Var> m_vars {};
         std::vector<size_t> m_scopes {};
+        
+        size_t m_string_label_count = 0;
+        std::vector<StringVar> m_string_labels {};
+        
         size_t m_label_count = 0;
 };
