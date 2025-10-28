@@ -1,277 +1,449 @@
 #pragma once
 #include <string>
 #include <cassert>
+#include <vector>
 
 enum class TokenType {
-    _exit,
-    int_lit,
-    _string,
-    semi,
-    open_paren,
-    closed_paren,
-    ident,
-    let,
-    eq,
-    plus,
-    star,
-    minus,
-    fslash,
-    open_curly,
-    closed_curly,
-    _if,
-    elif,
+    _and,
+    _as,
+    _boolean,
+    _break,
+    _by,
+    _call,
+    _character,
+    _columns,
+    _const,
+    _continue,
     _else,
+    _false,
+    _format,
+    _function,
+    _if,
+    _in,
+    _integer,
+    _length,
+    _loop,
+    _not,
+    _or,
+    _procedure,
+    _real,
+    _return,
+    _returns,
+    _reverse,
+    _rows,
+    _std_input,
+    _std_output,
+    _stream_state,
+    _string,
+    _struct,
+    _true,
+    _tuple,
+    _typealias,
+    _var,
+    _vector,
+    _while,
+
+    // custom
+    _plus,
+    _minus,
+    _asterisk,
+    _div,
+    _equal,
+    _qualifier,
+    _type,
+    _identifier,
+    _expression,
+    _semi,
+    _text,
+    _notImplemented,
+    _open_curly,
+    _close_curly,
+    _open_paren,
+    _close_paren,
+    _open_square,
+    _close_square,
+    _check_equal,
+    _less_than,
+    _greater_than,
+    _dbl_quote,
+    _sgl_quote,
+    _fwd_slash,
+    _period,
+    _comma,
+    _vert_line,
+    _mod,
+    _ampersand,
 };
 
-inline std::string to_string(const TokenType type) {
-    switch (type) {
-    case TokenType::_exit:
-        return "`exit`";
+class Token {
+private:
+    TokenType m_type;
+    std::string m_str_value;
+    int m_line;
+    int m_char;
 
-    case TokenType::int_lit:
-        return "int literal";
-
-    case TokenType::semi:
-        return "`;`";
-
-    case TokenType::open_paren:
-        return "`(`";
-
-    case TokenType::closed_paren:
-        return "`)`";
-
-    case TokenType::ident:
-        return "identifier";
-
-    case TokenType::let:
-        return "`let`";
-
-    case TokenType::eq:
-        return "`=`";
-
-    case TokenType::plus:
-        return "`+`";
-
-    case TokenType::star:
-        return "`*`";
-
-    case TokenType::minus:
-        return "`-`";
-
-    case TokenType::fslash:
-        return "`/`";
-
-    case TokenType::open_curly:
-        return "`{`";
-
-    case TokenType::closed_curly:
-        return "`}`";
-
-    case TokenType::_if:
-        return "`if`";
-
-    case TokenType::elif:
-        return "`elif`";
-
-    case TokenType::_else:
-        return "`else`";
-
+public:
+    Token(TokenType type, std::string str_value, int line, int _char) {
+        m_type = type;
+        m_str_value = str_value;
+        m_line = line;
+        m_char = _char;
     }
 
-    assert(false);
-}
-
-std::optional<int> bin_prec(TokenType type) {
-    switch (type) {
-    case TokenType::plus:
-    case TokenType::minus:
-        return 0;
-
-    case TokenType::star:
-    case TokenType::fslash:
-        return 1;
-
-    default:
-        return {};
+    int getLine() {
+        return m_line;
     }
-}
 
-struct Token {
-    TokenType type;
-    int line;
-    std::optional<std::string> value;
+    int getChar() {
+        return m_char;
+    }
+
+    std::vector<int> getPos() {
+        return std::vector<int>{getLine(), getChar()};
+    }
+
+    TokenType getTokenType() {
+        return m_type;
+    }
+
+    std::string getStrValue() {
+        return m_str_value;
+    }
 
 };
 
 class Tokenizer {
-    public:
-        inline Tokenizer(std::string& src)
-            : m_src(std::move(src))
-        {
-            
+private:
+    std::vector<Token> m_tokens;
+    std::string m_content;
+
+public:
+    explicit Tokenizer(std::string content) {
+        m_content = content;
+    }
+
+    Token getToken(std::string content, int line, int _char) {
+        if (content == "and") {
+            return Token(TokenType::_and, "`and`", line, _char);
+        }
+        
+        else if (content == "as") {
+            return Token(TokenType::_as, "`as`", line, _char);
         }
 
+        else if (content == "boolean") {
+            return Token(TokenType::_boolean, "`boolean`", line, _char);
+        }
 
-        inline std::vector<Token> tokenize() {
-            std::vector<Token> tokens;
-            std::string buffer;
-            int line_count = 1;
+        else if (content == "break") {
+            return Token(TokenType::_break, "`break`", line, _char);
+        }
 
-            while (peek().has_value()) {
-                if (std::isalpha(peek().value())) {
-                    buffer.push_back(consume());
+        else if (content == "by") {
+            return Token(TokenType::_by, "`by`", line, _char);
+        }
 
-                    while (peek().has_value() && std::isalnum(peek().value())) {
-                        buffer.push_back(consume());
-                    }
+        else if (content == "call") {
+            return Token(TokenType::_call, "`call`", line, _char);
+        }
 
-                    if (buffer == "exit") {
-                        tokens.push_back(Token{ .type = TokenType::_exit, .line = line_count });
-                        buffer.clear();
+        else if (content == "character") {
+            return Token(TokenType::_character, "`character`", line, _char);
+        }
 
-                    } else if (buffer == "let") {
-                        tokens.push_back(Token{ .type = TokenType::let, .line = line_count });
-                        buffer.clear();
+        else if (content == "columns") {
+            return Token(TokenType::_columns, "`columns`", line, _char);
+        }
 
-                    } else if (buffer == "if") {
-                        tokens.push_back(Token{ .type = TokenType::_if, .line = line_count });
-                        buffer.clear();
+        else if (content == "const") {
+            return Token(TokenType::_const, "`const`", line, _char);
+        }
 
-                    } else if (buffer == "elif") {
-                        tokens.push_back(Token{ .type = TokenType::elif, .line = line_count });
-                        buffer.clear();
+        else if (content == "continue") {
+            return Token(TokenType::_continue, "`continue`", line, _char);
+        }
+
+        else if (content == "else") {
+            return Token(TokenType::_else, "`else`", line, _char);
+        }
+
+        else if (content == "false") {
+            return Token(TokenType::_false, "`false`", line, _char);
+        }
+
+        else if (content == "format") {
+            return Token(TokenType::_format, "`format`", line, _char);
+        }
+
+        else if (content == "function") {
+            return Token(TokenType::_function, "`function`", line, _char);
+        }
+
+        else if (content == "if") {
+            return Token(TokenType::_if, "`if`", line, _char);
+        }
+
+        else if (content == "in") {
+            return Token(TokenType::_in, "`in`", line, _char);
+        }
+
+        else if (content == "integer") {
+            return Token(TokenType::_integer, "`integer`", line, _char);
+        }
+
+        else if (content == "length") {
+            return Token(TokenType::_length, "`length`", line, _char);
+        }
+
+        else if (content == "loop") {
+            return Token(TokenType::_loop, "`loop`", line, _char);
+        }
+
+        else if (content == "not") {
+            return Token(TokenType::_not, "`not`", line, _char);
+        }
+
+        else if (content == "or") {
+            return Token(TokenType::_or, "`or`", line, _char);
+        }
+
+        else if (content == "procedure") {
+            return Token(TokenType::_procedure, "`procedure`", line, _char);
+        }
+
+        else if (content == "real") {
+            return Token(TokenType::_real, "`real`", line, _char);
+        }
+
+        else if (content == "return") {
+            return Token(TokenType::_return, "`return`", line, _char);
+        }
+
+        else if (content == "returns") {
+            return Token(TokenType::_returns, "`returns`", line, _char);
+        }
+
+        else if (content == "reverse") {
+            return Token(TokenType::_reverse, "`reverse`", line, _char);
+        }
+
+        else if (content == "rows") {
+            return Token(TokenType::_rows, "`rows`", line, _char);
+        }
+
+        else if (content == "std_input") {
+            return Token(TokenType::_std_input, "`std_input`", line, _char);
+        }
+
+        else if (content == "std_output") {
+            return Token(TokenType::_std_output, "`std_output`", line, _char);
+        }
+
+        else if (content == "stream_state") {
+            return Token(TokenType::_stream_state, "`stream_state`", line, _char);
+        }
+
+        else if (content == "string") {
+            return Token(TokenType::_string, "`string`", line, _char);
+        }
+
+        else if (content == "struct") {
+            return Token(TokenType::_struct, "`struct`", line, _char);
+        }
+
+        else if (content == "true") {
+            return Token(TokenType::_true, "`true`", line, _char);
+        }
+
+        else if (content == "tuple") {
+            return Token(TokenType::_tuple, "`tuple`", line, _char);
+        }
+
+        else if (content == "typealias") {
+            return Token(TokenType::_typealias, "`typealias`", line, _char);
+        }
+
+        else if (content == "var") {
+            return Token(TokenType::_var, "`var`", line, _char);
+        }
+
+        else if (content == "vector") {
+            return Token(TokenType::_vector, "`vector`", line, _char);
+        }
+
+        else if (content == "while") {
+            return Token(TokenType::_while, "`while`", line, _char);
+        }
+
+        // custom
+        else if (content == ";") {
+            return Token(TokenType::_semi, "`;`", line, _char);
+        }
+
+        else if (content == "{") {
+            return Token(TokenType::_open_curly, "`{`", line, _char);
+        }
+
+        else if (content == "}") {
+            return Token(TokenType::_close_curly, "`}`", line, _char);
+        }
+
+        else if (content == "(") {
+            return Token(TokenType::_open_paren, "`(`", line, _char);
+        }
+
+        else if (content == ")") {
+            return Token(TokenType::_close_paren, "`)`", line, _char);
+        }
+
+        else if (content == "[") {
+            return Token(TokenType::_open_square, "`[`", line, _char);
+        }
+
+        else if (content == "]") {
+            return Token(TokenType::_close_square, "`]`", line, _char);
+        }
+
+        else if (content == "=") {
+            return Token(TokenType::_equal, "`=`", line, _char);
+        }
+
+        else if (content == ">") {
+            return Token(TokenType::_greater_than, "`>`", line, _char);
+        }
+
+        else if (content == "<") {
+            return Token(TokenType::_less_than, "`<`", line, _char);
+        }
+
+        else if (content == "'") {
+            return Token(TokenType::_sgl_quote, "`'`", line, _char);
+        }
+
+        else if (content == "\"") {
+            return Token(TokenType::_dbl_quote, "`\"`", line, _char);
+        }
+
+        else if (content == ",") {
+            return Token(TokenType::_comma, "`,`", line, _char);
+        }
+
+        else if (content == ".") {
+            return Token(TokenType::_period, "`.`", line, _char);
+        }
+
+        else if (content == "+") {
+            return Token(TokenType::_plus, "`+`", line, _char);
+        }
+
+        else if (content == "-") {
+            return Token(TokenType::_minus, "`-`", line, _char);
+        }
+
+        else if (content == "*") {
+            return Token(TokenType::_asterisk, "`*`", line, _char);
+        }
+
+        else if (content == "/") {
+            return Token(TokenType::_fwd_slash, "`/`", line, _char);
+        }
+
+        else if (content == "|") {
+            return Token(TokenType::_vert_line, "`|`", line, _char);
+        }
+
+        else if (content == "%") {
+            return Token(TokenType::_mod, "`%`", line, _char);
+        }
+
+        else if (content == "&") {
+            return Token(TokenType::_ampersand, "`&`", line, _char);
+        }
+
+        return Token(TokenType::_text, content, line, _char);
+    }
+
+    std::vector<Token> tokenize() {
+        std::string buffer;
+        int line = 0;
+        int _char = 0;
+        for (std::string::iterator it = m_content.begin(); it < m_content.end(); it++)
+        {
+            if (std::isspace(*it) && buffer == "") {
+                _char++;
+                continue;
+            }
+
+            if (std::isspace(*it)) {
+                m_tokens.push_back(getToken(buffer, line, _char));
+                buffer = "";
+
+            }
+            
+            else if (*it == '\n') {
+                line++;
+                _char = 0;
+
+                m_tokens.push_back(getToken(buffer, line, _char));
+                buffer = "";
+            }
+
+            else if (*it == ';' || *it == '{' || *it == '}' || *it == '(' || *it == ')' || *it == '[' || *it == ']' || *it == '"' || *it == '"' || *it == '\'' || *it == '=' || *it == '.' || *it == ',' || *it == '<' || *it == '>' || *it == '.' || *it == ',' || *it == '+' || *it == '-' || *it == '*' || *it == '/' || *it == '|' || *it == '%' || *it == '&') {
+
+                if (buffer == "") {
+                    buffer += *it;
+
+                    Token token = getToken(buffer, line, _char);
+                    m_tokens.push_back(token);
+                    buffer = "";
                     
-                    } else if (buffer == "else") {
-                        tokens.push_back(Token{ .type = TokenType::_else, .line = line_count });
-                        buffer.clear();
+                    // handle string
+                    if (token.getStrValue() == "`\"`") {
+                        it++;
+                        _char++;
+                        while (*it != '"') {
+                            buffer += *it;
 
-                    } else {
-                        tokens.push_back(Token{ .type = TokenType::ident, .line = line_count, .value = buffer });
-                        buffer.clear();
+                            if (*it == '\n') line++;
 
-                    }
-
-                } else if (peek().has_value() && std::isdigit(peek().value()) || (peek().has_value() && peek().value() == '-' && peek(1).has_value() && std::isdigit(peek(1).value()))) {
-                    if (peek().has_value() && peek().value() == '-') {
-                        buffer.push_back('-');
-                        consume();
-                    }
-
-                    while (peek().has_value() && std::isdigit(peek().value())) {
-                        buffer.push_back(consume());
-                    }
-
-                    int _value = stoi(buffer);
-                    tokens.push_back(Token{ .type = TokenType::int_lit, .line = line_count, .value = buffer });
-                    buffer.clear();
-
-                } else if (peek().has_value() && peek().value() == '"') {
-                    consume();
-                    while (peek().has_value() && peek().value() != '"') {
-                        buffer.push_back(consume());
-                    }
-                    consume();
-
-                    tokens.push_back(Token{ .type = TokenType::_string, .line = line_count, .value = buffer });
-                    buffer.clear();
-
-                } else if (peek().has_value() && peek().value() == '/' && peek(1).has_value() && peek(1).value() == '/') {
-                    consume();
-                    consume();
-                    while (peek().has_value() && peek().value() != '\n') {
-                        consume();
-                    }
-
-                } else if (peek().has_value() && peek().value() == '/' && peek(1).has_value() && peek(1).value() == '*') {
-                    while (peek().has_value()) {
-                        if (peek().value() == '*' && peek(1).has_value() && peek(1).value() == '/') {
-                            break;
+                            it++;
+                            _char++;
                         }
-                        
-                        std::cout << "consume" << std::endl;
-                        std::cout << consume() << std::endl;
+                        m_tokens.push_back(Token(TokenType::_string, buffer, line, _char));
+
+                        buffer = (*it);
+                        it++;
+                        token = getToken(buffer, line, _char);
+                        m_tokens.push_back(token);
+                        buffer = "";
+
                     }
 
-                    if (peek().has_value()) {
-                        consume();
-                    }
-
-                    if (peek().has_value()) {
-                        consume();
-                    }
-
-                } else if (peek().has_value() && peek().value() == '(') {
-                    consume();
-                    tokens.push_back(Token{ .type = TokenType::open_paren, .line = line_count });
-                    
-                } else if (peek().has_value() && peek().value() == ')') {
-                    consume();
-                    tokens.push_back(Token{ .type = TokenType::closed_paren, .line = line_count });
-                    
-                } else if (peek().has_value() && peek().value() == '=') {
-                    consume();
-                    tokens.push_back(Token{ .type = TokenType::eq, .line = line_count });
-
-                } else if (peek().has_value() && peek().value() == '+') {
-                    consume();
-                    tokens.push_back(Token{ .type = TokenType::plus, .line = line_count });
-
-                } else if (peek().has_value() && peek().value() == '-') {
-                    consume();
-                    tokens.push_back(Token{ .type = TokenType::minus, .line = line_count });
-
-                } else if (peek().has_value() && peek().value() == '*') {
-                    consume();
-                    tokens.push_back(Token{ .type = TokenType::star, .line = line_count });
-
-                } else if (peek().has_value() && peek().value() == '/') {
-                    consume();
-                    tokens.push_back(Token{ .type = TokenType::fslash, .line = line_count });
-
-                } else if (peek().has_value() && peek().value() == ';') {
-                    consume();
-                    tokens.push_back(Token{ .type = TokenType::semi, .line = line_count });
-
-                } else if (peek().has_value() && peek().value() == '{') {
-                    consume();
-                    tokens.push_back(Token{ .type = TokenType::open_curly, .line = line_count });
-
-                } else if (peek().has_value() && peek().value() == '}') {
-                    consume();
-                    tokens.push_back(Token{ .type = TokenType::closed_curly, .line = line_count });
-
-                } else if (peek().has_value() && peek().value() == '\n') {
-                    line_count++;
-                    consume();
-
-                } else if (peek().has_value() && std::isspace(peek().value())) {
-                    consume();
+                    buffer = "";
 
                 } else {
-                    std::cerr << "Invalid token" << std::endl;
-                    exit(EXIT_FAILURE);
+                    m_tokens.push_back(getToken(buffer, line, _char));
+                    buffer = "";
+                    it--;
+                    _char--;
                 }
             }
 
-            std::cout << tokens.size() << std::endl;
-            return tokens;
-        }
-
-
-
-    private:
-        [[nodiscard]] inline std::optional<char> peek(int ahead = 0) const {
-            if (m_pos + ahead < m_src.length()) {
-                return m_src.at(m_pos + ahead);
-            } else {
-                return {};
+            else {
+                buffer += (*it);
             }
+
+            _char++;
         }
 
-        inline char consume() {
-            return m_src.at(m_pos++);
-        }
+        return m_tokens;
+    }
 
-        const std::string m_src;
-        size_t m_pos = 0;
+    void print_tokens() {
+        std::cout << "tokens array size " << m_tokens.size() << std::endl;
+        for (auto it = m_tokens.begin(); it < m_tokens.end(); it++) {
+            std::cout << (*it).getStrValue() << std::endl;
+        }
+        return;
+    }
 };
