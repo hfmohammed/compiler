@@ -9,7 +9,7 @@ compile:
 
 link: src/main.o src/test.hy
 	@echo "Running compiler on test.hy..."
-	./main.o src/test.hy
+	./src/main.o src/test.hy
 
 run: compile link
 	@echo "Running assembled binary..."
@@ -17,4 +17,4 @@ run: compile link
 	@$(MAKE) clean
 
 clean:
-	rm test test.o main.o
+	rm test test.o src/main.o
