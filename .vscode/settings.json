@@ -105,6 +105,9 @@
     "ctime": "cpp",
     "numbers": "cpp",
     "cinttypes": "cpp",
-    "complex": "cpp"
+    "complex": "cpp",
+    "bitset": "cpp",
+    "list": "cpp",
+    "set": "cpp"
   }
 }

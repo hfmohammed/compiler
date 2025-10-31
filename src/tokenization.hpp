@@ -48,7 +48,7 @@ enum class TokenType {
     _minus,
     _asterisk,
     _div,
-    _equal,
+    _assign,
     _qualifier,
     _type,
     _identifier,
@@ -75,6 +75,7 @@ enum class TokenType {
     _mod,
     _ampersand,
     _double_slash,
+    _number,
 };
 
 class Token {
@@ -313,7 +314,7 @@ public:
         }
 
         else if (content == "=") {
-            return Token(TokenType::_equal, "`=`", line, _char);
+            return Token(TokenType::_assign, "`=`", line, _char);
         }
 
         else if (content == ">") {
@@ -369,12 +370,8 @@ public:
         }
 
         // double chars
-        else if (content == "//") {
-            return Token(TokenType::_double_slash, "`//`", line, _char);
-        }
-
         else if (content == "==") {
-            return Token(TokenType::_equal, "`==`", line, _char);
+            return Token(TokenType::_check_equal, "`==`", line, _char);
         }
 
         else if (content == ">=") {
@@ -385,6 +382,14 @@ public:
             return Token(TokenType::_less_than_equal, "`<=`", line, _char);
         }
 
+        else if (is_number(content)) {
+            return Token(TokenType::_number, content, line, _char);
+        }
+
+        else if (is_identifier(content)) {
+            return Token(TokenType::_identifier, content, line, _char);
+        }
+
         return Token(TokenType::_text, "`text`: \"" + content + "\"", line, _char);
     }
 
@@ -392,24 +397,34 @@ public:
     /*
         returns 1 if buffer meets the criteria to be an identifier otherwise 0
     */
-    int is_identifier(std::string buffer) {
-        if (std::isalpha(*buffer.begin()) || *buffer.begin() == '_') {
-            for (std::string::iterator s = buffer.begin() + 1; s < buffer.end(); s++) {
+    bool is_identifier(std::string content) {
+        if (std::isalpha(*content.begin()) || *content.begin() == '_') {
+            for (std::string::iterator s = content.begin() + 1; s < content.end(); s++) {
                 if (!std::isalnum(*s) && *s != '_') {
-                    return 0;
+                    return false;
                 }
             }
 
-            return 1;
+            return true;
         }
 
-        return 0;
+        return false;
+    }
+
+    int is_number(std::string content) {
+        bool decimal = false;
+        for (std::string::iterator s = content.begin(); s < content.end(); s++) {
+            if (*s == '.' && !decimal) decimal = true;
+            else if (!std::isdigit(*s)) return false;
+        }
+        return true;
     }
 
     std::vector<Token> tokenize() {
         std::string buffer;
         int line = 0;
         int _char = 0;
+        Token temp_token;
 
         for (std::string::iterator it = m_content.begin(); it < m_content.end(); it++)
         {
@@ -417,7 +432,8 @@ public:
 
             // handle token when space is encountered
             else if (std::isspace(*it)) {
-                m_tokens.push_back(getToken(buffer, line, _char));
+                temp_token = getToken(buffer, line, _char);
+                m_tokens.push_back(temp_token);
                 buffer = "";
 
             }
