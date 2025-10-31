@@ -128,6 +128,8 @@ public:
     }
 
     Token getToken(std::string content, int line, int _char) {
+        _char -= content.length();
+
         if (content.starts_with("//")) {
             return Token(TokenType::_double_slash, content, line, _char);
         }
@@ -390,6 +392,8 @@ public:
             return Token(TokenType::_identifier, content, line, _char);
         }
 
+        std::cerr << "Unexpected token at " << line << ":" << _char << std::endl;
+        assert(0);
         return Token(TokenType::_text, "`text`: \"" + content + "\"", line, _char);
     }
 
@@ -424,7 +428,6 @@ public:
         std::string buffer;
         int line = 0;
         int _char = 0;
-        Token temp_token;
 
         for (std::string::iterator it = m_content.begin(); it < m_content.end(); it++)
         {
@@ -432,8 +435,7 @@ public:
 
             // handle token when space is encountered
             else if (std::isspace(*it)) {
-                temp_token = getToken(buffer, line, _char);
-                m_tokens.push_back(temp_token);
+                m_tokens.push_back(getToken(buffer, line, _char));
                 buffer = "";
 
             }
@@ -503,8 +505,7 @@ public:
                             _char++;
                         }
 
-                        Token token_temp = Token(TokenType::_string, "`string`: \"" + buffer + "\"", line, _char);
-                        m_tokens.push_back(token_temp);
+                        m_tokens.push_back(Token(TokenType::_string, "`string`: \"" + buffer + "\"", line, _char));
 
                         buffer = (*it);
                         token = getToken(buffer, line, _char);
