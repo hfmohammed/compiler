@@ -16,5 +16,7 @@ run: compile link
 	@bash -c './test; echo "Exit status: $$?"'
 	@$(MAKE) clean
 
+comp_link: compile link
+
 clean:
 	rm test test.o src/main.o
