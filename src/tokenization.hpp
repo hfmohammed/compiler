@@ -74,7 +74,7 @@ enum class TokenType {
     _vert_line,
     _mod,
     _ampersand,
-    _double_slash,
+    _comment,
     _number,
 };
 
@@ -128,10 +128,21 @@ public:
     }
 
     Token getToken(std::string content, int line, int _char) {
+        // adjust the marker to point before the token
         _char -= content.length();
 
         if (content.starts_with("//")) {
-            return Token(TokenType::_double_slash, content, line, _char);
+            return Token(TokenType::_comment, content, line, _char);
+        }
+
+        else if (content.starts_with("/*")) {
+            if (content.ends_with("*/"))
+                return Token(TokenType::_comment, content, line, _char);
+            else {
+                std::cerr << "Expected `*/ at " << line << ":" << _char << std::endl;
+                exit(1);
+            }
+
         }
 
         else if (content == "and") {
@@ -393,7 +404,7 @@ public:
         }
 
         std::cerr << "Unexpected token at " << line << ":" << _char << std::endl;
-        assert(0);
+        exit(EXIT_FAILURE);
         return Token(TokenType::_text, "`text`: \"" + content + "\"", line, _char);
     }
 
@@ -431,7 +442,10 @@ public:
 
         for (std::string::iterator it = m_content.begin(); it < m_content.end(); it++)
         {
-            if (std::isspace(*it) && buffer.empty());     // skip if its space and buffer is empty
+            if (std::isspace(*it) && buffer.empty()) {
+                _char++;
+               continue;  // skip if its space and buffer is empty
+            }
 
             // handle token when space is encountered
             else if (std::isspace(*it)) {
@@ -458,26 +472,50 @@ public:
 
                     if ((it + 1 < m_content.end()) && (
                             (*it == '/' && *(it + 1) == '/') ||     // handle `//`
+                            (*it == '/' && *(it + 1) == '*') ||     // handle `/*`
                             (*it == '>' && *(it + 1) == '=') ||     // handle `>=`
                             (*it == '<' && *(it + 1) == '=') ||     // handle `<=`
                             (*it == '<' && *(it + 1) == '<') ||     // handle `<<`
                             (*it == '>' && *(it + 1) == '>') ||     // handle `>>`
                             (*it == '=' && *(it + 1) == '=')        // handle `==`
                     )) {
-                        // handle single-line comments
+                        // handle inline comments
                         if (*it == '/' && *(it + 1) == '/') {
                             while (*it != '\n') {
                                 buffer += *it;
                                 _char++;
                                 it++;
                             }
+                        } 
 
+                        // handle multi-line comments
+                        else if (*it == '/' && *(it + 1) == '*') {
+                            buffer += "/*";
+                            _char += 2;
+                            it += 2;
+
+                            while (*it != '*' && it + 1 < m_content.end() && *(it + 1) != '/') {
+                                if (*it == '\n') line++;
+                                else _char++;
+                                buffer += *it;
+                                _char++;
+                                it++;
+                            }
+
+                            if (*it == '*' && it + 1 < m_content.end() && *(it + 1) == '/') {
+                                buffer += *it;
+                                _char++;
+                                it++;
+                                buffer += *it;
+                            }
                         } 
                         
                         else {
+                            if (*it == '\n') line++;
+                            else _char++;
+
                             buffer += *it;
                             buffer += *(it + 1);
-                            _char++;
                             it++;
                         }
                     } 
@@ -488,10 +526,9 @@ public:
                     
 
                     Token token = getToken(buffer, line, _char);
-                    m_tokens.push_back(token);
                     
                     // handle string
-                    if (token.getStrValue() == "`\"`") {
+                    if (token.getTokenType() == TokenType::_dbl_quote) {
                         buffer = "";
 
                         it++;
@@ -513,6 +550,9 @@ public:
                         buffer = "";
                     }
 
+                    // skip comments
+                    else if (token.getTokenType() != TokenType::_comment) m_tokens.push_back(token);
+
                     buffer = "";
 
                 } 
@@ -533,7 +573,8 @@ public:
             _char++;
         }
 
-
+        m_tokens.push_back(getToken(buffer, line, _char));
+        buffer = "";
         return m_tokens;
     }
 

@@ -1,5 +1,5 @@
-var i = 10;
-if (blah) {
-  i = i + 1;
-  real i = 0;  // Illegal placement of a declaration.
+function x() returns integer; // "x" refers to this function in the global scope
+
+procedure main() {
+  integer x = 3; // "x" refers to this variable in the scope of main
 }
