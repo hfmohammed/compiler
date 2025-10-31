@@ -55,7 +55,6 @@ enum class TokenType {
     _expression,
     _semi,
     _text,
-    _notImplemented,
     _open_curly,
     _close_curly,
     _open_paren,
@@ -64,7 +63,9 @@ enum class TokenType {
     _close_square,
     _check_equal,
     _less_than,
+    _less_than_equal,
     _greater_than,
+    _greater_than_equal,
     _dbl_quote,
     _sgl_quote,
     _fwd_slash,
@@ -73,6 +74,7 @@ enum class TokenType {
     _vert_line,
     _mod,
     _ampersand,
+    _double_slash,
 };
 
 class Token {
@@ -83,6 +85,8 @@ private:
     int m_char;
 
 public:
+    Token() {}
+
     Token(TokenType type, std::string str_value, int line, int _char) {
         m_type = type;
         m_str_value = str_value;
@@ -123,7 +127,11 @@ public:
     }
 
     Token getToken(std::string content, int line, int _char) {
-        if (content == "and") {
+        if (content.starts_with("//")) {
+            return Token(TokenType::_double_slash, content, line, _char);
+        }
+
+        else if (content == "and") {
             return Token(TokenType::_and, "`and`", line, _char);
         }
         
@@ -360,45 +368,114 @@ public:
             return Token(TokenType::_ampersand, "`&`", line, _char);
         }
 
-        return Token(TokenType::_text, content, line, _char);
+        // double chars
+        else if (content == "//") {
+            return Token(TokenType::_double_slash, "`//`", line, _char);
+        }
+
+        else if (content == "==") {
+            return Token(TokenType::_equal, "`==`", line, _char);
+        }
+
+        else if (content == ">=") {
+            return Token(TokenType::_greater_than_equal, "`>=`", line, _char);
+        }
+
+        else if (content == "<=") {
+            return Token(TokenType::_less_than_equal, "`<=`", line, _char);
+        }
+
+        return Token(TokenType::_text, "`text`: \"" + content + "\"", line, _char);
+    }
+
+
+    /*
+        returns 1 if buffer meets the criteria to be an identifier otherwise 0
+    */
+    int is_identifier(std::string buffer) {
+        if (std::isalpha(*buffer.begin()) || *buffer.begin() == '_') {
+            for (std::string::iterator s = buffer.begin() + 1; s < buffer.end(); s++) {
+                if (!std::isalnum(*s) && *s != '_') {
+                    return 0;
+                }
+            }
+
+            return 1;
+        }
+
+        return 0;
     }
 
     std::vector<Token> tokenize() {
         std::string buffer;
         int line = 0;
         int _char = 0;
+
         for (std::string::iterator it = m_content.begin(); it < m_content.end(); it++)
         {
-            if (std::isspace(*it) && buffer == "") {
-                _char++;
-                continue;
-            }
+            if (std::isspace(*it) && buffer.empty());     // skip if its space and buffer is empty
 
-            if (std::isspace(*it)) {
+            // handle token when space is encountered
+            else if (std::isspace(*it)) {
                 m_tokens.push_back(getToken(buffer, line, _char));
                 buffer = "";
 
             }
             
+            // handle escape/new line character
             else if (*it == '\n') {
                 line++;
                 _char = 0;
-
-                m_tokens.push_back(getToken(buffer, line, _char));
+                if (buffer != "") {
+                    m_tokens.push_back(getToken(buffer, line, _char));
+                }
                 buffer = "";
             }
 
+            // handle single unique characters that may not have a space before them
             else if (*it == ';' || *it == '{' || *it == '}' || *it == '(' || *it == ')' || *it == '[' || *it == ']' || *it == '"' || *it == '"' || *it == '\'' || *it == '=' || *it == '.' || *it == ',' || *it == '<' || *it == '>' || *it == '.' || *it == ',' || *it == '+' || *it == '-' || *it == '*' || *it == '/' || *it == '|' || *it == '%' || *it == '&') {
 
+
                 if (buffer == "") {
-                    buffer += *it;
+
+                    if ((it + 1 < m_content.end()) && (
+                            (*it == '/' && *(it + 1) == '/') ||     // handle `//`
+                            (*it == '>' && *(it + 1) == '=') ||     // handle `>=`
+                            (*it == '<' && *(it + 1) == '=') ||     // handle `<=`
+                            (*it == '<' && *(it + 1) == '<') ||     // handle `<<`
+                            (*it == '>' && *(it + 1) == '>') ||     // handle `>>`
+                            (*it == '=' && *(it + 1) == '=')        // handle `==`
+                    )) {
+                        // handle single-line comments
+                        if (*it == '/' && *(it + 1) == '/') {
+                            while (*it != '\n') {
+                                buffer += *it;
+                                _char++;
+                                it++;
+                            }
+
+                        } 
+                        
+                        else {
+                            buffer += *it;
+                            buffer += *(it + 1);
+                            _char++;
+                            it++;
+                        }
+                    } 
+
+                    else {
+                        buffer = *it;
+                    }
+                    
 
                     Token token = getToken(buffer, line, _char);
                     m_tokens.push_back(token);
-                    buffer = "";
                     
                     // handle string
                     if (token.getStrValue() == "`\"`") {
+                        buffer = "";
+
                         it++;
                         _char++;
                         while (*it != '"') {
@@ -409,19 +486,22 @@ public:
                             it++;
                             _char++;
                         }
-                        m_tokens.push_back(Token(TokenType::_string, buffer, line, _char));
+
+                        Token token_temp = Token(TokenType::_string, "`string`: \"" + buffer + "\"", line, _char);
+                        m_tokens.push_back(token_temp);
 
                         buffer = (*it);
-                        it++;
                         token = getToken(buffer, line, _char);
                         m_tokens.push_back(token);
                         buffer = "";
-
                     }
 
                     buffer = "";
 
-                } else {
+                } 
+                
+                // handle 
+                else {
                     m_tokens.push_back(getToken(buffer, line, _char));
                     buffer = "";
                     it--;
@@ -435,6 +515,7 @@ public:
 
             _char++;
         }
+
 
         return m_tokens;
     }
