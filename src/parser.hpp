@@ -1,6 +1,14 @@
 #pragma once
 #include "./tokenization.hpp"
 
+struct Expression {
+    
+};
+
+struct Statement {
+
+};
+
 class Parser {
 private:
     std::vector<Token> m_tokens;
