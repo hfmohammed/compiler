@@ -442,7 +442,11 @@ public:
 
         for (std::string::iterator it = m_content.begin(); it < m_content.end(); it++)
         {
-            if (std::isspace(*it) && buffer.empty()) {
+            if (*it == EOF) {
+                break;
+            }
+
+            else if (std::isspace(*it) && buffer.empty()) {
                 _char++;
                continue;  // skip if its space and buffer is empty
             }
@@ -458,7 +462,7 @@ public:
             else if (*it == '\n') {
                 line++;
                 _char = 0;
-                if (buffer != "") {
+                if (!buffer.empty()) {
                     m_tokens.push_back(getToken(buffer, line, _char));
                 }
                 buffer = "";
@@ -572,16 +576,19 @@ public:
 
             _char++;
         }
+        
+        if (!buffer.empty()) {
+            m_tokens.push_back(getToken(buffer, line, _char));
+            buffer = "";
+        }
 
-        m_tokens.push_back(getToken(buffer, line, _char));
-        buffer = "";
         return m_tokens;
     }
 
     void print_tokens() {
         std::cout << "tokens array size " << m_tokens.size() << std::endl;
         for (auto it = m_tokens.begin(); it < m_tokens.end(); it++) {
-            std::cout << (*it).getStrValue() << std::endl;
+            std::cout << "::" << (*it).getStrValue() << std::endl;
         }
         return;
     }
