@@ -108,6 +108,7 @@
     "complex": "cpp",
     "bitset": "cpp",
     "list": "cpp",
-    "set": "cpp"
+    "set": "cpp",
+    "mutex": "cpp"
   }
 }

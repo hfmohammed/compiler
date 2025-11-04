@@ -27,7 +27,6 @@ int main(int argc, char* argv[]) {
 
     Tokenizer tokenizer(content);
     std::vector<Token> tokens = tokenizer.tokenize();
-    tokenizer.print_tokens();
 
     Parser parser(tokens);
     parser.parse();
