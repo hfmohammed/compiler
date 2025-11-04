@@ -42,6 +42,7 @@ enum class TokenType {
     _var,
     _vector,
     _while,
+    _xor,
 
     // custom
     _plus,
@@ -54,6 +55,7 @@ enum class TokenType {
     _identifier,
     _expression,
     _semi,
+    _hat,
     _text,
     _open_curly,
     _close_curly,
@@ -76,6 +78,10 @@ enum class TokenType {
     _ampersand,
     _comment,
     _number,
+    _dbl_period,
+    _dbl_vertical_line,
+    _not_eq,
+    _dbl_asterisk,
 };
 
 class Token {
@@ -297,9 +303,17 @@ public:
             return Token(TokenType::_while, "`while`", line, _char);
         }
 
+        else if (content == "xor") {
+            return Token(TokenType::_xor, "`xor`", line, _char);
+        }
+
         // custom
         else if (content == ";") {
             return Token(TokenType::_semi, "`;`", line, _char);
+        }
+
+        else if (content == "^") {
+            return Token(TokenType::_hat, "`^`", line, _char);
         }
 
         else if (content == "{") {
@@ -395,6 +409,22 @@ public:
             return Token(TokenType::_less_than_equal, "`<=`", line, _char);
         }
 
+        else if (content == "..") {
+            return Token(TokenType::_dbl_period, "`..`", line, _char);
+        }
+
+        else if (content == "||") {
+            return Token(TokenType::_dbl_vertical_line, "`||`", line, _char);
+        }
+
+        else if (content == "!=") {
+            return Token(TokenType::_not_eq, "`!=`", line, _char);
+        }
+
+        else if (content == "**") {
+            return Token(TokenType::_dbl_asterisk, "`**`", line, _char);
+        }
+
         else if (is_number(content)) {
             return Token(TokenType::_number, content, line, _char);
         }
@@ -469,11 +499,11 @@ public:
             }
 
             // handle single unique characters that may not have a space before them
-            else if (*it == ';' || *it == '{' || *it == '}' || *it == '(' || *it == ')' || *it == '[' || *it == ']' || *it == '"' || *it == '"' || *it == '\'' || *it == '=' || *it == '.' || *it == ',' || *it == '<' || *it == '>' || *it == '.' || *it == ',' || *it == '+' || *it == '-' || *it == '*' || *it == '/' || *it == '|' || *it == '%' || *it == '&') {
+            else if (*it == ';' || *it == '{' || *it == '}' || *it == '(' || *it == ')' || *it == '[' || *it == ']' || *it == '"' || *it == '"' || *it == '\'' || *it == '=' || *it == '.' || *it == ',' || *it == '<' || *it == '>' || *it == '.' || *it == ',' || *it == '+' || *it == '-' || *it == '*' || *it == '/' || *it == '|' || *it == '%' || *it == '&' || *it == '^') {
 
 
                 if (buffer == "") {
-
+                    // handle double characters
                     if ((it + 1 < m_content.end()) && (
                             (*it == '/' && *(it + 1) == '/') ||     // handle `//`
                             (*it == '/' && *(it + 1) == '*') ||     // handle `/*`
@@ -481,6 +511,10 @@ public:
                             (*it == '<' && *(it + 1) == '=') ||     // handle `<=`
                             (*it == '<' && *(it + 1) == '<') ||     // handle `<<`
                             (*it == '>' && *(it + 1) == '>') ||     // handle `>>`
+                            (*it == '.' && *(it + 1) == '.') ||     // handle `..`
+                            (*it == '*' && *(it + 1) == '*') ||     // handle `**`
+                            (*it == '!' && *(it + 1) == '=') ||     // handle `!=`
+                            (*it == '|' && *(it + 1) == '|') ||     // handle `||`
                             (*it == '=' && *(it + 1) == '=')        // handle `==`
                     )) {
                         // handle inline comments
