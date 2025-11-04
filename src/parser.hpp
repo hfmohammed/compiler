@@ -1,24 +1,38 @@
 #pragma once
 #include "./tokenization.hpp"
 #include <optional>
+#include <variant>
 
 
-struct NodeQualifier {
-    Token* token;
+
+struct NodeOperator {
+    Token token;
 };
 
-struct NodeType {
-    Token* token;
+struct NodeIdentifier {
+    Token token;
 };
 
-struct Operator {
-    Token* token;
+struct NodeInteger {
+    Token token;
+    int value;
+};
+
+struct NodeString {
+    Token token;
+    std::string value;
+};
+
+struct NodeExpression;
+
+struct NodeExpressionBinary {
+    std::optional<NodeExpression> _lhs;
+    std::optional<NodeExpression> _op;
+    std::optional<NodeExpression> _rhs;
 };
 
 struct NodeExpression {
-    std::optional<NodeExpression*> _lhs;
-    std::optional<NodeExpression*> _rhs;
-    std::optional<NodeExpression*> _op;
+    std::variant<NodeExpressionBinary, NodeInteger, NodeString, NodeIdentifier> _expression;
 };
 
 struct NodeDecleration {
@@ -28,13 +42,14 @@ struct NodeDecleration {
     std::optional<NodeExpression> _expression;
 };
 
-struct NodeStatement {
-    std::optional<NodeDecleration> _decleration;
+struct NodeBlock {
+    std::vector<NodeStatement> _statements;
 };
 
-struct NodeBlock {
-    std::vector<NodeStatement*> _statements;
+struct NodeStatement {
+    std::variant<NodeDecleration, NodeBlock> _decleration;
 };
+
 
 struct NodeProgram {
     std::vector<NodeStatement> _statements;
@@ -80,8 +95,59 @@ public:
         return false;
     }
 
+    parseMember() {
+
+    }
+
+    bool is_operator(Token token) {
+        if (token.getTokenType() == TokenType::_period || token.getTokenType() == TokenType::_dbl_period || token.getTokenType() == TokenType::_plus || token.getTokenType() == TokenType::_minus || token.getTokenType() == TokenType::_not || token.getTokenType() == TokenType::_hat || token.getTokenType() == TokenType::_asterisk || token.getTokenType() == TokenType::_fwd_slash || token.getTokenType() == TokenType::_mod || token.getTokenType() == TokenType::_dbl_asterisk || token.getTokenType() == TokenType::_by || token.getTokenType() == TokenType::_greater_than || token.getTokenType() == TokenType::_less_than || token.getTokenType() == TokenType::_greater_than_equal || token.getTokenType() == TokenType::_less_than_equal || token.getTokenType() == TokenType::_check_equal || token.getTokenType() == TokenType::_not_eq || token.getTokenType() == TokenType::_and || token.getTokenType() == TokenType::_or || token.getTokenType() == TokenType::_xor || token.getTokenType() == TokenType::_dbl_vertical_line) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
     NodeExpression parseExpression() {
-        return NodeExpression{};
+        NodeExpression expression;
+        if (m_tokens_pointer->getTokenType() == TokenType::_string) {
+            NodeString _string = NodeString{.token=*m_tokens_pointer, .value=m_tokens_pointer->getStrValue()};
+            expression._expression = _string;
+        }
+
+        else if (m_tokens_pointer->getTokenType() == TokenType::_integer) {
+            NodeInteger _integer = NodeInteger{.token=*m_tokens_pointer, .value=std::stoi(m_tokens_pointer->getStrValue())};
+            expression._expression = _integer;
+        }
+
+        else if (m_tokens_pointer->getTokenType() == TokenType::_identifier) {
+            NodeIdentifier _identifier = NodeIdentifier{.token=*m_tokens_pointer};
+            expression._expression = _identifier;
+        }
+                
+        m_tokens_pointer++;
+
+        if (m_tokens_pointer->getTokenType() != TokenType::_semi) {
+
+            if (is_operator(*m_tokens_pointer)) {
+                expression = NodeExpressionBinary{
+                    ._lhs = expression, 
+                    ._op=NodeOperator{ 
+                        .token = *m_tokens_pointer 
+                    }, 
+                    .rhs=parseExpression()
+                }
+            }
+
+            else if (m_tokens_pointer->getTokenType() == TokenType::_open_square) {
+                // handle indexing
+            }
+
+            else {
+                printError("Expected an operator", m_tokens_pointer->getLine(), m_tokens_pointer->getChar());
+            } 
+        }
+        
+        return expression;
     }
 
     std::optional<NodeDecleration> parseDecleration() {

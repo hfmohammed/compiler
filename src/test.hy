@@ -1,1 +1,1 @@
-var integer x = 10;
+var integer x = 2 + 3 - 1;
