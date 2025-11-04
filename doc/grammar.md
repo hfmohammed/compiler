@@ -12,5 +12,9 @@
 - optional: qualifier
 - type
 - identifier
+- equal
 - optional: expression
 - semicolon
+
+## Expression
+
