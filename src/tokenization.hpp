@@ -52,6 +52,7 @@ enum class TokenType {
     _xor,
 
     // custom
+    _else_if,
     _binary_plus,
     _unary_plus,
     _binary_minus,
@@ -270,6 +271,10 @@ public:
 
         else if (content == "if") {
             return Token(TokenType::_if, "`if`", line, _char);
+        }
+
+        else if (content == "else if") {
+            return Token(TokenType::_else_if, "`else if`", line, _char);
         }
 
         else if (content == "in") {
