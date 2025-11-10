@@ -306,7 +306,13 @@ public:
         
         if (m_tokens_pointer->getTokenType() == TokenType::_open_paren) {
             m_tokens_pointer++;
-            parseExpression();
+            lhs = parseExpression(0);
+
+            if (m_tokens_pointer >= m_tokens.end() || m_tokens_pointer->getTokenType() != TokenType::_close_paren) {
+                printError("Expected `)`", m_tokens_pointer->getLine(), m_tokens_pointer->getChar());
+            }
+            
+            m_tokens_pointer++;
         
         } else if (m_tokens_pointer->getTokenType() == TokenType::_not || m_tokens_pointer->getTokenType() == TokenType::_unary_plus || m_tokens_pointer->getTokenType() == TokenType::_unary_minus) {
             printDebug("parsing unary operator");
