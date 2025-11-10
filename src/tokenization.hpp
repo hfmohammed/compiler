@@ -213,7 +213,7 @@ public:
             return Token(TokenType::_stream_output, "`->`", line, _char);
         }
 
-        else if (content == "and") {
+        else if (content == "<-") {
             return Token(TokenType::_stream_input, "`<-`", line, _char);
         }
 
@@ -660,7 +660,7 @@ public:
                             _char++;
                         }
 
-                        m_tokens.push_back(Token(TokenType::_string, "`string`: \"" + buffer + "\"", line, _char));
+                        m_tokens.push_back(Token(TokenType::_text, "`string`: \"" + buffer + "\"", line, _char));
                         buffer = (*it);
                         printDebug(buffer);
                         token = getToken(buffer, line, _char);

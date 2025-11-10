@@ -28,6 +28,7 @@ struct NodeString {
 };
 
 struct NodeExpression;
+struct NodeStatement;
 
 struct NodeExpressionUnary {
     NodeOperator* _operator;
@@ -44,6 +45,12 @@ struct NodeStatementToken {
     Token* _token;
 };
 
+struct NodeLoop {
+    bool* _predicated;
+    NodeExpression* _expression;
+    NodeStatement* _statement;
+};
+
 struct NodeExpression {
     std::variant<NodeExpressionBinary*, NodeInteger*, NodeString*, NodeIdentifier*, NodeExpressionUnary*> _expression;
 };
@@ -55,8 +62,6 @@ struct NodeDecleration {
     NodeExpression* _expression;
 };
 
-
-struct NodeStatement;
 
 struct NodeBlock {
     std::vector<NodeStatement*> _statements;
@@ -77,8 +82,14 @@ struct NodeReturn {
     NodeExpression* _expression;
 };
 
+struct NodeStream {
+    NodeExpression* _expression;
+    Token* _operator;
+    Token* _destination;
+};
+
 struct NodeStatement {
-    std::variant<NodeDecleration*, NodeBlock*, NodeControl*, NodeStatementToken*, NodeReturn*> _statement;
+    std::variant<NodeDecleration*, NodeBlock*, NodeControl*, NodeStatementToken*, NodeReturn*, NodeStream*, NodeLoop*> _statement;
 };
 
 class Parser {
@@ -174,24 +185,66 @@ public:
 
         } else if (std::holds_alternative<NodeControl*>(statement->_statement)) {
             NodeControl* node_control = std::get<NodeControl*>(statement->_statement);
-            printDebug(output.str() + node_control->_token->getStrValue());
-
+            if (node_control->_token->getTokenType() == TokenType::_if) {
+                printDebug(output.str() + "[if]");
+            
+            } else if (node_control->_token->getTokenType() == TokenType::_else_if) {
+                printDebug(output.str() + "[else if]");
+            } else if (node_control->_token->getTokenType() == TokenType::_else) {
+                printDebug(output.str() + "[else]");
+            }
+            
             if (node_control->_token->getTokenType() == TokenType::_if || node_control->_token->getTokenType() == TokenType::_else_if) {
                 printExpression(node_control->_expression, indent);
             }
 
-            printStatement(node_control->_statement, indent);
+            printStatement(node_control->_statement, indent + 1);
 
         } else if (std::holds_alternative<NodeStatementToken*>(statement->_statement)) {
             NodeStatementToken* node_statement_token = std::get<NodeStatementToken*>(statement->_statement);
-            printDebug(output.str() + node_statement_token->_token->getStrValue());
+
+            if (node_statement_token->_token->getTokenType() == TokenType::_continue) {
+                printDebug(output.str() + "[continue]");
+
+            } else if (node_statement_token->_token->getTokenType() == TokenType::_break) {
+                printDebug(output.str() + "[break]");
+            }
+
+        } else if (std::holds_alternative<NodeStream*>(statement->_statement)) {
+            NodeStream* node_stream = std::get<NodeStream*>(statement->_statement);
+            printDebug(output.str() + "[stream]");
+            output << "    ";
+            printDebug(output.str() + node_stream->_operator->getStrValue() + " " + node_stream->_destination->getStrValue() + " (");
+            printExpression(node_stream->_expression, indent + 2);
+            printDebug(output.str() + ")");
+        
+        } else if (std::holds_alternative<NodeLoop*>(statement->_statement)) {
+            NodeLoop* node_loop = std::get<NodeLoop*>(statement->_statement);
+            printDebug(output.str() + "[loop]");
+            if (node_loop->_expression) {
+                if (node_loop->_predicated) {
+                    printDebug(output.str() + "[while]");
+                    printExpression(node_loop->_expression, indent + 1);
+                    printStatement(node_loop->_statement, indent + 1);
+
+                } else {
+                    printDebug(output.str() + "[while]");
+                    printStatement(node_loop->_statement, indent + 1);
+                    printExpression(node_loop->_expression, indent + 1);
+                }
+            } else {
+                printStatement(node_loop->_statement, indent + 1);
+            }
 
         } else if (std::holds_alternative<NodeReturn*>(statement->_statement)) {
             NodeReturn* node_return = std::get<NodeReturn*>(statement->_statement);
-            printDebug(output.str() + node_return->_token->getStrValue());
-            if (node_return->_expression != NULL) {
-                printExpression(node_return->_expression, indent);
+            printDebug(output.str() + "[return]");
+            if (node_return->_expression) {
+                printExpression(node_return->_expression, indent + 1);
             }
+
+        } else {
+            printError("Unexpected statement encountered during print" + std::string(typeid(statement->_statement).name()));
         }
     }
 
@@ -200,17 +253,8 @@ public:
         printDebug(std::string("printing program ") + std::to_string((program->_statements).size()));
 
         int indent = 0;
-        int tab_count = 0;
-        std::stringstream output;
-        while (tab_count++ < indent) {
-            output << "    ";
-        }
-
         for (std::vector<NodeStatement*>::iterator i = (program->_statements).begin(); i < (program->_statements).end(); i++) {
-            output << "[statement " << i - program->_statements.begin() << "]";
-            printDebug(output.str());
-            printStatement(*i, indent + 1);
-            output.str("");
+            printStatement(*i, indent);
         }
     }
 
@@ -361,7 +405,7 @@ public:
             printOk("parsed unary expression");
             lhs->_expression = node_expression_unary;
         
-        } else if (m_tokens_pointer->getTokenType() == TokenType::_string) {
+        } else if (m_tokens_pointer->getTokenType() == TokenType::_text) {
             NodeString* _string = new NodeString{.token=*m_tokens_pointer, .value=m_tokens_pointer->getStrValue()};
             lhs->_expression = _string;
             m_tokens_pointer++;
@@ -380,7 +424,8 @@ public:
             printDebug("Added identifier");
 
         } else {
-            printError("Unexpected token in expression: " + std::string(typeid(m_tokens_pointer->getTokenType()).name()));
+            NodeExpression* null_expression = nullptr;
+            return null_expression;
         }
 
         printOk("parsed lhs");
@@ -468,10 +513,8 @@ public:
                     }
                 }
                 parseSemi();
-                return decleration;
             }
 
-            printError("expected <identifier>", m_tokens_pointer->getLine(), m_tokens_pointer->getChar());
             return decleration;
         }
 
@@ -480,13 +523,14 @@ public:
             printError("expected <type>", m_tokens_pointer->getLine(), m_tokens_pointer->getChar());
             return decleration;
         } else {
+            NodeDecleration* decleration = nullptr;
             return decleration;
         }
     }
 
     NodeBlock* parseBlock() {
         NodeBlock* node_block = new NodeBlock();
-        if (m_tokens_pointer->getTokenType() == TokenType::_open_curly) { // parseBlock
+        if (m_tokens_pointer->getTokenType() == TokenType::_open_curly) {
             m_tokens_pointer++;
 
             printDebug("Opening a block");
@@ -504,10 +548,7 @@ public:
 
     NodeStatement* parseStatement() {
         NodeStatement* statement = new NodeStatement();
-        if (m_tokens_pointer->getTokenType() == TokenType::_binary_minus && (m_tokens_pointer + 1)->getTokenType() == TokenType::_greater_than) {} // parse stream input
-        else if (m_tokens_pointer->getTokenType() == TokenType::_less_than && (m_tokens_pointer + 1)->getTokenType() == TokenType::_binary_minus) {} // parse stream output
-
-        else if (m_tokens_pointer->getTokenType() == TokenType::_else || m_tokens_pointer->getTokenType() == TokenType::_if) { // parseIf()
+        if (m_tokens_pointer->getTokenType() == TokenType::_else || m_tokens_pointer->getTokenType() == TokenType::_if) {
             printDebug(std::string("parsing ") + (m_tokens_pointer->getTokenType() == TokenType::_if ? "if" : "else if") + std::string(" statement"));
             
             NodeControl* node_control = new NodeControl();
@@ -540,15 +581,41 @@ public:
         }
 
         else if (m_tokens_pointer->getTokenType() == TokenType::_loop) { // parseLoop()
+            NodeLoop* node_loop = new NodeLoop();
+            node_loop->_predicated = new bool(0);
+            printDebug("parsing loop");
+            m_tokens_pointer++;
+            
+            if (m_tokens_pointer->getTokenType() == TokenType::_while) {
+                node_loop->_predicated = new bool(1);
+                m_tokens_pointer++;
 
+                node_loop->_expression = parseExpression();
+            }
+
+            node_loop->_statement = parseStatement();
+
+            if (m_tokens_pointer->getTokenType() == TokenType::_while) {
+                if (!node_loop->_predicated) {
+                    m_tokens_pointer++;
+
+                    node_loop->_expression = parseExpression();
+                    parseSemi();
+                
+                } else {
+                    printError("Unexpected `while`", m_tokens_pointer->getLine(), m_tokens_pointer->getChar());
+                }
+            }
+
+            statement->_statement = node_loop;
         }
 
-        else if (m_tokens_pointer->getTokenType() == TokenType::_open_curly) { // parseBlock
+        else if (m_tokens_pointer->getTokenType() == TokenType::_open_curly) {
             statement->_statement = parseBlock();
             printOk("parsed a block");
         }
 
-        else if (m_tokens_pointer->getTokenType() == TokenType::_break || m_tokens_pointer->getTokenType() == TokenType::_continue) { // parseReturn()
+        else if (m_tokens_pointer->getTokenType() == TokenType::_break || m_tokens_pointer->getTokenType() == TokenType::_continue) {
             NodeStatementToken* node_statement_token = new NodeStatementToken();
             node_statement_token->_token = &(*m_tokens_pointer);
 
@@ -557,7 +624,7 @@ public:
             parseSemi();
         }
 
-        else if (m_tokens_pointer->getTokenType() == TokenType::_return) { // parseReturn
+        else if (m_tokens_pointer->getTokenType() == TokenType::_return) {
             
             NodeReturn* node_return = new NodeReturn();
             node_return->_token = &(*m_tokens_pointer);
@@ -570,15 +637,51 @@ public:
             statement->_statement = node_return;
         }
 
-        else {
-            printDebug("parsing decleration... " + std::to_string(m_tokens_pointer - m_tokens.begin()));
-            NodeDecleration* declaration = parseDecleration();
+        else if (NodeDecleration* declaration = parseDecleration()) {
             printOk("Decleration parsed");
             if (declaration) {
                 statement->_statement = declaration;
             }
         }
 
+        else {
+            auto temp = m_tokens_pointer;
+            if (NodeExpression* expression = parseExpression()) {
+                if (m_tokens_pointer->getTokenType() == TokenType::_stream_output && (m_tokens_pointer + 1)->getTokenType() == TokenType::_std_output) {
+                    NodeStream* node_stream = new NodeStream();
+                    node_stream->_operator = &(*m_tokens_pointer);
+                    node_stream->_destination = &(*(m_tokens_pointer + 1));
+                    node_stream->_expression = expression;
+                    m_tokens_pointer += 2;
+
+                    parseSemi();
+                    statement->_statement = node_stream;
+
+                    printOk("Found an output stream statement");
+
+                } else if (m_tokens_pointer->getTokenType() == TokenType::_stream_input && (m_tokens_pointer + 1)->getTokenType() == TokenType::_std_input && std::holds_alternative<NodeIdentifier*>(expression->_expression)) {
+                    NodeStream* node_stream = new NodeStream();
+                    node_stream->_operator = &(*m_tokens_pointer);
+                    node_stream->_destination = &(*(m_tokens_pointer + 1));
+                    node_stream->_expression = expression;
+                    m_tokens_pointer += 2;
+
+                    parseSemi();
+                    statement->_statement = node_stream;
+
+                    printOk("Found an output stream statement");
+
+                } else {
+                    printOk("Found a stream statement");
+                }
+            } 
+
+            else {
+                m_tokens_pointer = temp;
+                printError("Invalid statement", m_tokens_pointer->getLine(), m_tokens_pointer->getChar());
+            }
+        }
+        
         printDebug("Returning statement");
         return statement;
     }

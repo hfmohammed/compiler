@@ -28,3 +28,11 @@ if (asd) {
 }
 
 return 1212 * 123 + (2 - 2);
+
+a -> std_output;
+a <- std_input;
+
+loop "hello!\n" -> std_output;
+return;
+continue;
+
