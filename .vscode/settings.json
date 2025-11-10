@@ -109,6 +109,7 @@
     "bitset": "cpp",
     "list": "cpp",
     "set": "cpp",
-    "mutex": "cpp"
+    "mutex": "cpp",
+    "typeindex": "cpp"
   }
 }

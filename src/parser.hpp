@@ -9,12 +9,16 @@
 #define RED     "\033[31m"
 
 
+struct NodeMemberAccess {
+
+};
+
 struct NodeOperator {
     Token token;
 };
 
 struct NodeIdentifier {
-    Token token;
+    Token* token;
 };
 
 struct NodeInteger {
@@ -29,14 +33,19 @@ struct NodeString {
 
 struct NodeExpression;
 
+struct NodeExpressionUnary {
+    NodeOperator* _operator;
+    NodeExpression* _expression;
+};
+
 struct NodeExpressionBinary {
     NodeExpression* _lhs;
-    NodeOperator* _op;
+    NodeOperator* _operator;
     NodeExpression* _rhs;
 };
 
 struct NodeExpression {
-    std::variant<NodeExpressionBinary*, NodeInteger*, NodeString*, NodeIdentifier*> _expression;
+    std::variant<NodeExpressionBinary*, NodeInteger*, NodeString*, NodeIdentifier*, NodeExpressionUnary*> _expression;
 };
 
 struct NodeDecleration {
@@ -81,14 +90,10 @@ public:
         }
 
         if (std::holds_alternative<NodeExpressionBinary*>(expression->_expression)) {
-            // printDebug(output.str() + "[NodeExpressionBinary]");
 
             NodeExpressionBinary* node_binary = std::get<NodeExpressionBinary*>(expression->_expression);
-            if (node_binary->_op) {
-                // printDebug("Found operator");
-                printDebug(output.str() + node_binary->_op->token.getStrValue() + " (");
-                // printDebug(typeid(node_binary->_lhs).name());
-                // if (std::holds_alternative<NodeExpressionBinary*>(node_binary->_lhs->_expression))
+            if (node_binary->_operator) {
+                printDebug(output.str() + node_binary->_operator->token.getStrValue() + " (");
                 printExpression(node_binary->_lhs, indent + 1);
                 printExpression(node_binary->_rhs, indent + 1);
                 printDebug(output.str() + ")");
@@ -99,16 +104,22 @@ public:
             NodeInteger* node_integer = std::get<NodeInteger*>(expression->_expression);
             printDebug(output.str() + std::to_string(node_integer->value));
 
-            
         } else if (std::holds_alternative<NodeString*>(expression->_expression)) {
-            printDebug("else if (std::holds_alternative<NodeString*>(expression->_expression))");
+            NodeString* node_string = std::get<NodeString*>(expression->_expression);
+            printDebug(output.str() + node_string->value);
             
         } else if (std::holds_alternative<NodeIdentifier*>(expression->_expression)) {
-            printDebug("else if (std::holds_alternative<NodeIdentifier*>(expression->_expression))");
+            NodeIdentifier* node_identifier = std::get<NodeIdentifier*>(expression->_expression);
+            printDebug(output.str() + node_identifier->token->getStrValue());
+
+        } else if (std::holds_alternative<NodeExpressionUnary*>(expression->_expression)) {
+            NodeExpressionUnary* node_expression_unary = std::get<NodeExpressionUnary*>(expression->_expression);
+            printDebug(output.str() + node_expression_unary->_operator->token.getStrValue() + " (");
+            printExpression(node_expression_unary->_expression, indent + 1);
+            printDebug(output.str() + ")");
             
         } else {
-
-            printDebug("else");
+            printError("expression doesn't hold the required alternative: " + std::string(typeid(expression->_expression).name()));
         }
     }
 
@@ -196,97 +207,170 @@ public:
 
     bool isType(Token& token) {
         TokenType token_type = token.getTokenType();
-        
-        if (token_type == TokenType::_boolean || token_type == TokenType::_character || token_type == TokenType::_integer || token_type == TokenType::_real ||
-            token_type == TokenType::_tuple || token_type == TokenType::_struct || token_type == TokenType::_vector || token_type == TokenType::_string
-        ) {
-            return true;
+        switch (token_type)
+        {
+            case TokenType::_boolean:
+            case TokenType::_character:
+            case TokenType::_integer:
+            case TokenType::_real:
+            case TokenType::_tuple:
+            case TokenType::_struct:
+            case TokenType::_vector:
+            case TokenType::_string:
+                return true;
+            default:
+                return false;
         }
-
-        return false;
     }
 
     bool is_operator(Token token) {
-        // checks if token is an operator
-        return token.getTokenType() == TokenType::_period || 
-            token.getTokenType() == TokenType::_dbl_period || 
-            token.getTokenType() == TokenType::_plus || 
-            token.getTokenType() == TokenType::_minus || 
-            token.getTokenType() == TokenType::_not || 
-            token.getTokenType() == TokenType::_hat || 
-            token.getTokenType() == TokenType::_asterisk || 
-            token.getTokenType() == TokenType::_fwd_slash || 
-            token.getTokenType() == TokenType::_mod || 
-            token.getTokenType() == TokenType::_dbl_asterisk || 
-            token.getTokenType() == TokenType::_by || 
-            token.getTokenType() == TokenType::_greater_than || 
-            token.getTokenType() == TokenType::_less_than || 
-            token.getTokenType() == TokenType::_greater_than_equal || 
-            token.getTokenType() == TokenType::_less_than_equal || 
-            token.getTokenType() == TokenType::_check_equal || 
-            token.getTokenType() == TokenType::_not_eq || 
-            token.getTokenType() == TokenType::_and || 
-            token.getTokenType() == TokenType::_or || 
-            token.getTokenType() == TokenType::_xor || 
-            token.getTokenType() == TokenType::_dbl_vertical_line;
+        switch (token.getTokenType())
+        {
+            case TokenType::_period:
+            case TokenType::_dbl_period:
+            case TokenType::_unary_plus:
+            case TokenType::_binary_plus:
+            case TokenType::_unary_minus:
+            case TokenType::_binary_minus:
+            case TokenType::_not:
+            case TokenType::_hat:
+            case TokenType::_asterisk:
+            case TokenType::_fwd_slash:
+            case TokenType::_mod:
+            case TokenType::_dbl_asterisk:
+            case TokenType::_by:
+            case TokenType::_greater_than:
+            case TokenType::_less_than:
+            case TokenType::_greater_than_equal:
+            case TokenType::_less_than_equal:
+            case TokenType::_check_equal:
+            case TokenType::_not_eq:
+            case TokenType::_and:
+            case TokenType::_or:
+            case TokenType::_xor:
+            case TokenType::_dbl_vertical_line:
+                return true;
+            default:
+                return false;
+        }
     }
 
-    void parseMember() {
-        return;
+    int isRightAssociative(Token* token) {
+        TokenType token_type = token->getTokenType();
+
+        if (token_type == TokenType::_unary_plus || token_type == TokenType::_unary_minus || token_type == TokenType::_not || token_type == TokenType::_hat || token_type == TokenType::_dbl_vertical_line) {
+            return 1;
+        }
+        return 0;
     }
 
-    NodeExpression* parseExpression() {
-        printDebug("parsing expression...");
-        NodeExpression* expression = new NodeExpression();
-        if (m_tokens_pointer->getTokenType() == TokenType::_string) {
-            NodeString* _string = new NodeString{.token=*m_tokens_pointer, .value=m_tokens_pointer->getStrValue()};
-            expression->_expression = _string;
-            printDebug("Added string");
-        }
+    int getOperatorPrec(Token* token) {
+        TokenType token_type = token->getTokenType();
+        printDebug("getting operator precedence");
+        printDebug(token->getStrValue());
 
-        else if ((m_tokens_pointer)->getTokenType() == TokenType::_number) {
-            NodeInteger* _integer = new NodeInteger{.token=*m_tokens_pointer, .value=std::stoi(m_tokens_pointer->getStrValue())};
-            expression->_expression = _integer;
-            printDebug("Added integer");
-        }
-
-        else if (m_tokens_pointer->getTokenType() == TokenType::_identifier) {
-            NodeIdentifier* _identifier = new NodeIdentifier{.token=*m_tokens_pointer};
-            expression->_expression = _identifier;
-            printDebug("Added identifier");
+        if (token_type == TokenType::_period) {
+            return 13;
+        } else if (token_type == TokenType::_open_square) {
+            return 12;
+        } else if (token_type == TokenType::_dbl_period) {
+            return 11;
+        } else if (token_type == TokenType::_unary_plus || token_type == TokenType::_unary_minus || token_type == TokenType::_not) {
+            return 10;
+        } else if (token_type == TokenType::_hat) {
+            return 9;
+        } else if (token_type == TokenType::_asterisk || token_type == TokenType::_fwd_slash || token_type == TokenType::_mod || token_type == TokenType::_dbl_asterisk) {
+            return 8;
+        } else if (token_type == TokenType::_binary_plus || token_type == TokenType::_binary_minus) {
+            return 7;
+        } else if (token_type == TokenType::_by) {
+            return 6;
+        } else if (token_type == TokenType::_less_than || token_type == TokenType::_greater_than || token_type == TokenType::_less_than_equal || token_type == TokenType::_greater_than_equal) {
+            return 5;
+        } else if (token_type == TokenType::_check_equal || token_type == TokenType::_not_eq) {
+            return 4;
+        } else if (token_type == TokenType::_and) {
+            return 3;
+        } else if (token_type == TokenType::_or || token_type == TokenType::_xor) {
+            return 2;
+        } else if (token_type == TokenType::_dbl_vertical_line) {
+            return 1;
         } else {
-            printError("Unexpected token in expression: " + std::to_string(static_cast<int>(m_tokens_pointer->getTokenType())));
+            return 0;
         }
-                
-        m_tokens_pointer++;
+    }
 
-        if (m_tokens_pointer->getTokenType() != TokenType::_semi) {
+    NodeExpression* parseExpression(int min_precedence = 0) {
+        printDebug("parsing expression with precedence: " + std::to_string(min_precedence));
+        NodeExpression* lhs = new NodeExpression();
+        
+        if (m_tokens_pointer->getTokenType() == TokenType::_open_paren) {
+            m_tokens_pointer++;
+            parseExpression();
+        
+        } else if (m_tokens_pointer->getTokenType() == TokenType::_not || m_tokens_pointer->getTokenType() == TokenType::_unary_plus || m_tokens_pointer->getTokenType() == TokenType::_unary_minus) {
+            printDebug("parsing unary operator");
+            
+            NodeExpressionUnary* node_expression_unary = new NodeExpressionUnary();
+            node_expression_unary->_operator = new NodeOperator{.token = *m_tokens_pointer};
+            printOk("parsed unary operator");
+            m_tokens_pointer++;
 
-            if (is_operator(*m_tokens_pointer)) {
-                NodeExpressionBinary* binary_expression = new NodeExpressionBinary();
-                
-                binary_expression->_lhs = expression;
-                binary_expression->_op = new NodeOperator{.token = *m_tokens_pointer};
-                m_tokens_pointer++;
-                
-                printDebug("parsing expression");
-                binary_expression->_rhs = parseExpression();
+            node_expression_unary->_expression = parseExpression(10);
+            printOk("parsed unary expression");
+            lhs->_expression = node_expression_unary;
+        
+        } else if (m_tokens_pointer->getTokenType() == TokenType::_string) {
+            NodeString* _string = new NodeString{.token=*m_tokens_pointer, .value=m_tokens_pointer->getStrValue()};
+            lhs->_expression = _string;
+            m_tokens_pointer++;
+            printDebug("Added string");
+        
+        } else if (m_tokens_pointer->getTokenType() == TokenType::_number) {
+            NodeInteger* _integer = new NodeInteger{.token=*m_tokens_pointer, .value=std::stoi(m_tokens_pointer->getStrValue())};
+            lhs->_expression = _integer;
+            m_tokens_pointer++;
+            printDebug("Added integer");
 
-                expression = new NodeExpression();
-                expression->_expression = binary_expression;
-                return expression;
+        } else if (m_tokens_pointer->getTokenType() == TokenType::_identifier) {
+            NodeIdentifier* _identifier = new NodeIdentifier{.token = &(*m_tokens_pointer)};
+            lhs->_expression = _identifier;
+            m_tokens_pointer++;
+            printDebug("Added identifier");
+
+        } else {
+            printError("Unexpected token in expression: " + std::string(typeid(m_tokens_pointer->getTokenType()).name()));
+        }
+
+        printOk("parsed lhs");
+
+        while (m_tokens_pointer < m_tokens.end() && is_operator(*m_tokens_pointer)) {
+            printDebug("found an operator");
+
+            Token* op = &(*m_tokens_pointer);
+            int prec = getOperatorPrec(op);
+            bool right_assoc = isRightAssociative(op);
+
+            if (prec < min_precedence) {
+                break;
             }
 
-            else if (m_tokens_pointer->getTokenType() == TokenType::_open_square) {
-                // handle indexing
-            }
+            m_tokens_pointer++;
 
-            else {
-                printError("Expected an operator", m_tokens_pointer->getLine(), m_tokens_pointer->getChar());
-            } 
+            int next_min_prec = right_assoc ? prec : prec + 1;
+
+            NodeExpression* rhs = parseExpression(next_min_prec);
+
+            NodeExpressionBinary* bin = new NodeExpressionBinary();
+            bin->_lhs = lhs;
+            bin->_operator = new NodeOperator{.token = *op};
+            bin->_rhs = rhs;
+
+            lhs = new NodeExpression{._expression = bin};
         }
 
-        return expression;
+        printDebug("returning expression");
+        return lhs;
     }
 
     NodeDecleration* parseDecleration() {
@@ -331,13 +415,13 @@ public:
                 }
 
 
-                if ((m_tokens_pointer)->getTokenType() == TokenType::_semi) {
+                if (m_tokens_pointer->getTokenType() == TokenType::_semi) {
                     m_tokens_pointer++;
                     printOk("completed a statement");
                     return decleration;
 
                 } else {
-                    printError("Expected `;`", m_tokens_pointer->getLine(), m_tokens_pointer->getChar());
+                    printError("Expected `;` but got " + m_tokens_pointer->getStrValue(), m_tokens_pointer->getLine(), m_tokens_pointer->getChar());
                     return decleration;
 
                 }
@@ -359,8 +443,8 @@ public:
 
     NodeStatement* parseStatement() {
         NodeStatement* statement = new NodeStatement();
-        if (m_tokens_pointer->getTokenType() == TokenType::_minus && (m_tokens_pointer + 1)->getTokenType() == TokenType::_greater_than) {} // parse stream input
-        else if (m_tokens_pointer->getTokenType() == TokenType::_less_than && (m_tokens_pointer + 1)->getTokenType() == TokenType::_minus) {} // parse stream output
+        if (m_tokens_pointer->getTokenType() == TokenType::_binary_minus && (m_tokens_pointer + 1)->getTokenType() == TokenType::_greater_than) {} // parse stream input
+        else if (m_tokens_pointer->getTokenType() == TokenType::_less_than && (m_tokens_pointer + 1)->getTokenType() == TokenType::_binary_minus) {} // parse stream output
         else if (m_tokens_pointer->getTokenType() == TokenType::_else && (m_tokens_pointer + 1)->getTokenType() == TokenType::_if) {} // parse else if
         else if (m_tokens_pointer->getTokenType() == TokenType::_if) {} // parseIf()
         else if (m_tokens_pointer->getTokenType() == TokenType::_else) {} // parseElse()
