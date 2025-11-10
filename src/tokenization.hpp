@@ -3,6 +3,13 @@
 #include <cassert>
 #include <vector>
 
+
+#define CYAN    "\033[36m"
+#define GREEN   "\033[32m"
+#define YELLOW  "\033[33m"
+#define RED     "\033[31m"
+
+
 enum class TokenType {
     _and,
     _as,
@@ -45,10 +52,13 @@ enum class TokenType {
     _xor,
 
     // custom
-    _plus,
-    _minus,
+    _binary_plus,
+    _unary_plus,
+    _binary_minus,
+    _unary_minus,
+    _stream_input,
+    _stream_output,
     _asterisk,
-    _div,
     _assign,
     _qualifier,
     _type,
@@ -133,6 +143,49 @@ public:
         m_content = content;
     }
 
+    void printDebug(std::string msg) {
+        std::cout << std::string(CYAN) + "[debug] " + msg + "\033[0m" << std::endl;
+    }
+
+    void printOk(std::string msg) {
+        std::cout << std::string(GREEN) + "[ok] " + msg + "\033[0m" << std::endl;
+    }
+
+    void printError(std::string error_msg) {
+        throw std::runtime_error(std::string(RED) + error_msg + "\033[0m");
+    }
+
+    void printError(std::string error_msg, int line, int _char) {
+        throw std::runtime_error(std::string(RED) + error_msg + " at " + std::to_string(line) + ":" + std::to_string(_char) + "\033[0m");
+    }
+
+    bool is_operator(Token token) {
+        // checks if token is an operator
+        return token.getTokenType() == TokenType::_period || 
+            token.getTokenType() == TokenType::_dbl_period || 
+            token.getTokenType() == TokenType::_binary_plus || 
+            token.getTokenType() == TokenType::_unary_plus || 
+            token.getTokenType() == TokenType::_binary_minus || 
+            token.getTokenType() == TokenType::_unary_minus || 
+            token.getTokenType() == TokenType::_not || 
+            token.getTokenType() == TokenType::_hat || 
+            token.getTokenType() == TokenType::_asterisk || 
+            token.getTokenType() == TokenType::_fwd_slash || 
+            token.getTokenType() == TokenType::_mod || 
+            token.getTokenType() == TokenType::_dbl_asterisk || 
+            token.getTokenType() == TokenType::_by || 
+            token.getTokenType() == TokenType::_greater_than || 
+            token.getTokenType() == TokenType::_less_than || 
+            token.getTokenType() == TokenType::_greater_than_equal || 
+            token.getTokenType() == TokenType::_less_than_equal || 
+            token.getTokenType() == TokenType::_check_equal || 
+            token.getTokenType() == TokenType::_not_eq || 
+            token.getTokenType() == TokenType::_and || 
+            token.getTokenType() == TokenType::_or || 
+            token.getTokenType() == TokenType::_xor || 
+            token.getTokenType() == TokenType::_dbl_vertical_line;
+    }
+
     Token getToken(std::string content, int line, int _char) {
         // adjust the marker to point before the token
         _char -= content.length();
@@ -154,7 +207,15 @@ public:
         else if (content == "and") {
             return Token(TokenType::_and, "`and`", line, _char);
         }
-        
+
+        else if (content == "->") {
+            return Token(TokenType::_stream_output, "`->`", line, _char);
+        }
+
+        else if (content == "and") {
+            return Token(TokenType::_stream_input, "`<-`", line, _char);
+        }
+
         else if (content == "as") {
             return Token(TokenType::_as, "`as`", line, _char);
         }
@@ -369,11 +430,20 @@ public:
         }
 
         else if (content == "+") {
-            return Token(TokenType::_plus, "`+`", line, _char);
+            if (m_tokens.size() == 0 || is_operator(m_tokens.back()) || 
+                m_tokens.back().getTokenType() == TokenType::_open_curly || m_tokens.back().getTokenType() == TokenType::_assign || m_tokens.back().getTokenType() == TokenType::_open_paren || m_tokens.back().getTokenType() == TokenType::_open_square 
+            ) {
+                return Token(TokenType::_unary_plus, "`+`", line, _char);
+            }
+            return Token(TokenType::_binary_plus, "`+`", line, _char);
         }
 
         else if (content == "-") {
-            return Token(TokenType::_minus, "`-`", line, _char);
+            if (m_tokens.size() == 0 || is_operator(m_tokens.back()) || 
+                m_tokens.back().getTokenType() == TokenType::_open_curly || m_tokens.back().getTokenType() == TokenType::_assign || m_tokens.back().getTokenType() == TokenType::_open_paren || m_tokens.back().getTokenType() == TokenType::_open_square 
+            ) return Token(TokenType::_unary_minus, "`-`", line, _char);
+
+            return Token(TokenType::_binary_minus, "`-`", line, _char);
         }
 
         else if (content == "*") {
@@ -443,6 +513,8 @@ public:
         returns 1 if buffer meets the criteria to be an identifier otherwise 0
     */
     bool is_identifier(std::string content) {
+        printDebug("checking if identifier: " + content);
+
         if (std::isalpha(*content.begin()) || *content.begin() == '_') {
             for (std::string::iterator s = content.begin() + 1; s < content.end(); s++) {
                 if (!std::isalnum(*s) && *s != '_') {
@@ -505,6 +577,9 @@ public:
                 if (buffer == "") {
                     // handle double characters
                     if ((it + 1 < m_content.end()) && (
+                            (*it == '-' && *(it + 1) == '>') ||     // handle `->`
+                            (*it == '<' && *(it + 1) == '-') ||     // handle `<-`
+                            (*it == '/' && *(it + 1) == '/') ||     // handle `//`
                             (*it == '/' && *(it + 1) == '/') ||     // handle `//`
                             (*it == '/' && *(it + 1) == '*') ||     // handle `/*`
                             (*it == '>' && *(it + 1) == '=') ||     // handle `>=`
@@ -581,10 +656,13 @@ public:
                         }
 
                         m_tokens.push_back(Token(TokenType::_string, "`string`: \"" + buffer + "\"", line, _char));
-
                         buffer = (*it);
+                        printDebug(buffer);
                         token = getToken(buffer, line, _char);
-                        m_tokens.push_back(token);
+                        if (token.getTokenType() != TokenType::_dbl_quote) {
+                            printError("Expected `\"`", token.getLine(), token.getChar());
+                        }
+
                         buffer = "";
                     }
 
@@ -622,7 +700,7 @@ public:
     void print_tokens() {
         std::cout << "tokens array size " << m_tokens.size() << std::endl;
         for (auto it = m_tokens.begin(); it < m_tokens.end(); it++) {
-            std::cout << "::" << (*it).getStrValue() << std::endl;
+            printDebug( "::" + (*it).getStrValue());
         }
         return;
     }

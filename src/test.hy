@@ -1,2 +1,1 @@
-var integer x = 2 + 3 - 1;
-var integer x;
+var integer x = not -2 + +3 - "1" + y;
