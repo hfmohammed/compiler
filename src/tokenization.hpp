@@ -89,10 +89,13 @@ enum class TokenType {
     _ampersand,
     _comment,
     _number,
+    _int_lit,
+    _char_lit,
     _dbl_period,
     _dbl_vertical_line,
     _not_eq,
     _dbl_asterisk,
+    _generator,
 };
 
 class Token {
@@ -160,7 +163,7 @@ public:
         throw std::runtime_error(std::string(RED) + error_msg + " at " + std::to_string(line) + ":" + std::to_string(_char) + "\033[0m");
     }
 
-    bool is_operator(Token token) {
+    bool isOperator(Token token) {
         // checks if token is an operator
         return token.getTokenType() == TokenType::_period || 
             token.getTokenType() == TokenType::_dbl_period || 
@@ -199,7 +202,7 @@ public:
             if (content.ends_with("*/"))
                 return Token(TokenType::_comment, content, line, _char);
             else {
-                std::cerr << "Expected `*/ at " << line << ":" << _char << std::endl;
+                printError("Expected `*/`", line, _char);
                 exit(1);
             }
 
@@ -435,7 +438,7 @@ public:
         }
 
         else if (content == "+") {
-            if (m_tokens.size() == 0 || is_operator(m_tokens.back()) || 
+            if (m_tokens.size() == 0 || isOperator(m_tokens.back()) || 
                 m_tokens.back().getTokenType() == TokenType::_open_curly || m_tokens.back().getTokenType() == TokenType::_assign || m_tokens.back().getTokenType() == TokenType::_open_paren || m_tokens.back().getTokenType() == TokenType::_open_square 
             ) {
                 return Token(TokenType::_unary_plus, "`+`", line, _char);
@@ -444,7 +447,7 @@ public:
         }
 
         else if (content == "-") {
-            if (m_tokens.size() == 0 || is_operator(m_tokens.back()) || 
+            if (m_tokens.size() == 0 || isOperator(m_tokens.back()) || 
                 m_tokens.back().getTokenType() == TokenType::_open_curly || m_tokens.back().getTokenType() == TokenType::_assign || m_tokens.back().getTokenType() == TokenType::_open_paren || m_tokens.back().getTokenType() == TokenType::_open_square 
             ) return Token(TokenType::_unary_minus, "`-`", line, _char);
 
@@ -500,15 +503,24 @@ public:
             return Token(TokenType::_dbl_asterisk, "`**`", line, _char);
         }
 
-        else if (is_number(content)) {
+        
+        else if (isNumber(content)) {
+            printDebug("Found number");
             return Token(TokenType::_number, content, line, _char);
         }
-
-        else if (is_identifier(content)) {
-            return Token(TokenType::_identifier, content, line, _char);
+        
+        else if (isInt(content)) {
+            return Token(TokenType::_int_lit, content, line, _char);
         }
 
-        std::cerr << "Unexpected token at " << line << ":" << _char << std::endl;
+        else if (isIdentifier(content)) {
+            return Token(TokenType::_identifier, content, line, _char);
+        
+        } else if (isGenerator(content)) {
+            return Token(TokenType::_generator, content, line, _char);
+        }
+
+        printError("Unexpected token", line, _char);
         exit(EXIT_FAILURE);
         return Token(TokenType::_text, "`text`: \"" + content + "\"", line, _char);
     }
@@ -517,7 +529,7 @@ public:
     /*
         returns 1 if buffer meets the criteria to be an identifier otherwise 0
     */
-    bool is_identifier(std::string content) {
+    bool isIdentifier(std::string content) {
         printDebug("checking if identifier: " + content);
 
         if (std::isalpha(*content.begin()) || *content.begin() == '_') {
@@ -533,7 +545,29 @@ public:
         return false;
     }
 
-    int is_number(std::string content) {
+    bool isInt(std::string content) {
+        printDebug("checking is int");
+        for (std::string::iterator s = content.begin(); s < content.end(); s++) {
+            if (!std::isdigit(*s)) return false;
+        }
+        return true;
+    }
+
+    bool isGenerator(std::string content) {
+        printDebug("checking is generator");
+        bool found_1 = false;
+        bool found_2 = false;
+        for (std::string::iterator s = content.begin(); s < content.end(); s++) {
+            if ((!std::isdigit(*s) && *s != '.') || (*s == '.' && found_1 && found_2)) return false;
+            
+            if (*s == '.' && found_1) found_2 = true;
+            else if (*s == '.') found_1 = true;
+            printDebug(std::string(1, *s) + " " + std::to_string(found_1) + " " + std::to_string(found_2));
+        }
+        return found_1 && found_2;
+    }
+
+    bool isNumber(std::string content) {
         bool decimal = false;
         for (std::string::iterator s = content.begin(); s < content.end(); s++) {
             if (*s == '.' && !decimal) decimal = true;
@@ -549,13 +583,22 @@ public:
 
         for (std::string::iterator it = m_content.begin(); it < m_content.end(); it++)
         {
+            // printDebug(std::string(1, *it) + " at " + std::to_string(line) + ":" + std::to_string(_char));
+
             if (*it == EOF) {
                 break;
             }
 
             else if (std::isspace(*it) && buffer.empty()) {
-                _char++;
-               continue;  // skip if its space and buffer is empty
+                if (*it == '\n') {
+                    line++;
+                    _char = 0;
+                    if (!buffer.empty()) {
+                        m_tokens.push_back(getToken(buffer, line, _char));
+                    }
+                    buffer = "";
+                    continue;
+                }
             }
 
             // handle token when space is encountered
@@ -563,16 +606,6 @@ public:
                 m_tokens.push_back(getToken(buffer, line, _char));
                 buffer = "";
 
-            }
-            
-            // handle escape/new line character
-            else if (*it == '\n') {
-                line++;
-                _char = 0;
-                if (!buffer.empty()) {
-                    m_tokens.push_back(getToken(buffer, line, _char));
-                }
-                buffer = "";
             }
 
             // handle single unique characters that may not have a space before them
@@ -598,7 +631,7 @@ public:
                             (*it == '=' && *(it + 1) == '=')        // handle `==`
                     )) {
                         // handle inline comments
-                        if (*it == '/' && *(it + 1) == '/') {
+                        if (*it == '/' && it + 1 < m_content.end() && *(it + 1) == '/') {
                             while (*it != '\n') {
                                 buffer += *it;
                                 _char++;
@@ -612,7 +645,7 @@ public:
                             _char += 2;
                             it += 2;
 
-                            while (*it != '*' && it + 1 < m_content.end() && *(it + 1) != '/') {
+                            while (*it != '*' || it + 1 < m_content.end() && *(it + 1) != '/') {
                                 if (*it == '\n') line++;
                                 else _char++;
                                 buffer += *it;
@@ -647,17 +680,56 @@ public:
                     
                     // handle string
                     if (token.getTokenType() == TokenType::_dbl_quote) {
+                        printDebug("Handing string");
                         buffer = "";
 
                         it++;
                         _char++;
-                        while (*it != '"') {
-                            buffer += *it;
+                        while (it < m_content.end() && *it != '"') {
+                            printDebug(buffer);
+                            if (*it == '\\' && it + 1 < m_content.end()) {
+                                printDebug("Found an escape character");
+                                printDebug(std::string(1, *(it + 1)));
 
-                            if (*it == '\n') line++;
+                                if (*(it + 1) == '0') {
+                                    buffer += '\0';
 
-                            it++;
-                            _char++;
+                                } else if (*(it + 1) == 'a') {
+                                    buffer += '\a';
+
+                                } else if (*(it + 1) == 'b') {
+                                    buffer += '\b';
+
+                                } else if (*(it + 1) == 't') {
+                                    buffer += '\t';
+                                
+                                } else if (*(it + 1) == 'n') {
+                                    buffer += '\n';
+
+                                } else if (*(it + 1) == 'r') {
+                                    buffer += '\r';
+                                
+                                } else if (*(it + 1) == '"') {
+                                    buffer += "\"";
+
+                                } else if (*(it + 1) == '\'') {
+                                    buffer += "'";
+
+                                } else if (*(it + 1) == '\\') {
+                                    buffer += '\\';
+                                }
+
+                                it += 2;
+                                _char += 2;
+
+                            } else {
+                                buffer += *it;
+    
+                                if (*it == '\n') line++;
+    
+                                it++;
+                                _char++;
+                            }
                         }
 
                         m_tokens.push_back(Token(TokenType::_text, "`string`: \"" + buffer + "\"", line, _char));
@@ -671,19 +743,80 @@ public:
                         buffer = "";
                     }
 
+                    else if (token.getTokenType() == TokenType::_sgl_quote) {
+                        buffer = "";
+                        it++;
+                        _char++;
+
+                        if (*it == '\\' && it + 1 < m_content.end()) {
+                            printDebug("Found an escape character");
+                            printDebug(std::string(1, *(it + 1)));
+
+                            if (*(it + 1) == '0') {
+                                buffer += '\0';
+
+                            } else if (*(it + 1) == 'a') {
+                                buffer += '\a';
+
+                            } else if (*(it + 1) == 'b') {
+                                buffer += '\b';
+
+                            } else if (*(it + 1) == 't') {
+                                buffer += '\t';
+                            
+                            } else if (*(it + 1) == 'n') {
+                                buffer += '\n';
+
+                            } else if (*(it + 1) == 'r') {
+                                buffer += '\r';
+                            
+                            } else if (*(it + 1) == '"') {
+                                buffer += "\"";
+
+                            } else if (*(it + 1) == '\'') {
+                                buffer += "'";
+
+                            } else if (*(it + 1) == '\\') {
+                                buffer += '\\';
+                            }
+
+                            
+                        } else {
+                            buffer += *it;
+                        }
+                        it++;
+                        _char += 1;
+
+                        if (token.getTokenType() != TokenType::_sgl_quote) {
+                            printError("Exected `'`", line, _char);
+                        } else {
+                            m_tokens.push_back(Token(TokenType::_char_lit, "`character`: '" + buffer + "'", line, _char));
+                        }
+                    }
+
                     // skip comments
                     else if (token.getTokenType() != TokenType::_comment) m_tokens.push_back(token);
+                    
 
                     buffer = "";
 
                 } 
                 
-                // handle 
+                // handle .
                 else {
-                    m_tokens.push_back(getToken(buffer, line, _char));
-                    buffer = "";
-                    it--;
-                    _char--;
+                    if (isNumber(buffer) && *it == '.') {
+                        buffer += '.';
+                        if (!(isNumber(buffer))) {
+                            if (buffer.back() != '.' || (buffer.size() > 1 && buffer[buffer.size() - 2] != '.')) {
+                                printError("Invalid number", line, _char);
+                            }
+                        }
+                    } else {
+                        m_tokens.push_back(getToken(buffer, line, _char));
+                        buffer = "";
+                        it--;
+                        _char--;
+                    }
                 }
             }
 
@@ -703,7 +836,7 @@ public:
     }
 
     void print_tokens() {
-        std::cout << "tokens array size " << m_tokens.size() << std::endl;
+        printDebug("tokens array size " + std::to_string(m_tokens.size()));
         for (auto it = m_tokens.begin(); it < m_tokens.end(); it++) {
             printDebug( "::" + (*it).getStrValue());
         }
