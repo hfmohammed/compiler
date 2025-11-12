@@ -98,6 +98,7 @@ struct NodeFunctionDecleration {
     Token* _return_type;
     NodeStatement* _statement;
     NodeExpression* _expression;
+    bool* is_function;
 };
 
 struct NodeProgramElement {
@@ -243,11 +244,21 @@ public:
         while (tab_count++ < indent) {
             output << "    ";
         }
+        if (*(function_decleration->is_function) == true) {
+            printDebug(output.str() + "[function Decleration] `" + function_decleration->_identifier->_token->getStrValue() + "`");
 
-        printDebug(output.str() + "[function Decleration] `" + function_decleration->_identifier->_token->getStrValue());
-        output << "    ";
-        printDebug(output.str() + "[returns] " + function_decleration->_return_type->getStrValue());
-        
+            output << "    ";
+            printDebug(output.str() + "[returns] " + function_decleration->_return_type->getStrValue());
+
+        } else if (*(function_decleration->is_function) == false) {
+            printDebug(output.str() + "[procedure Decleration] `" + function_decleration->_identifier->_token->getStrValue() + "`");
+
+            output << "    ";
+            
+        } else {
+            printError("Invalid function or procedure decleration");
+        }
+
         printDebug(output.str() + "[arguments] `");
         for (std::vector<NodeFunctionDeclerationArgument*>::iterator i = function_decleration->_arguments.begin(); i < function_decleration->_arguments.end(); i++) {
             printDebug(output.str() + "    " + (*i)->_type->getStrValue() + ": " + (*i)->_identifier->_token->getStrValue());
@@ -363,7 +374,7 @@ public:
         printDebug(std::string("printing program ") + std::to_string((program->_elements).size()));
 
         int indent = 0;
-        for (std::vector<NodeProgramElement*>::iterator i = (program->_elements).begin(); i < (program->_elements).end(); i++) {
+        for (std::vector<NodeProgramElement*>::iterator i = program->_elements.begin(); i < program->_elements.end(); i++) {
             printElement(*i, indent);
         }
 
@@ -871,36 +882,42 @@ public:
         return nullptr;
     }
 
-    NodeFunctionDeclerationArgument* parseFunctionDeclerationArgument() {
-        printDebug("parsing argument");
+    NodeFunctionDeclerationArgument* parseFunctionDeclerationArgument(bool* is_function) {
+        printDebug("parsing DeclerationArgument");
 
-        if (isType(&(*m_tokens_pointer))) {
-            printDebug("found type");
+        if (*is_function || (m_tokens_pointer++)->getTokenType() == TokenType::_var) {
+            if (isType(&(*m_tokens_pointer))) {
+                printDebug("found type");
 
-            NodeFunctionDeclerationArgument* node_argument = new NodeFunctionDeclerationArgument();
+                NodeFunctionDeclerationArgument* node_argument = new NodeFunctionDeclerationArgument();
 
-            node_argument->_type = &(*m_tokens_pointer);
-            m_tokens_pointer++;
-
-            if (m_tokens_pointer < m_tokens.end() && m_tokens_pointer->getTokenType() == TokenType::_identifier) {
-                NodeIdentifier* node_identifier = new NodeIdentifier();
-                node_identifier->_token = &(*m_tokens_pointer);
-
-                node_argument->_identifier = node_identifier;
+                node_argument->_type = &(*m_tokens_pointer);
                 m_tokens_pointer++;
 
+                if (m_tokens_pointer < m_tokens.end() && m_tokens_pointer->getTokenType() == TokenType::_identifier) {
+                    NodeIdentifier* node_identifier = new NodeIdentifier();
+                    node_identifier->_token = &(*m_tokens_pointer);
+
+                    node_argument->_identifier = node_identifier;
+                    m_tokens_pointer++;
+
+                } else {
+                    printError("Expected identifier", m_tokens_pointer->getLine(), m_tokens_pointer->getChar());
+                }
+
+                printDebug("parsed argument");
+                return node_argument;
             } else {
-                printError("Expected identifier", m_tokens_pointer->getLine(), m_tokens_pointer->getChar());
+                printError("couldnt find type: " + m_tokens_pointer->getStrValue());
             }
 
-            printDebug("parsed argument");
-            return node_argument;
+        } else {
+            printError("Failed to parse argument");
         }
-
         return nullptr;
     }
     
-    std::vector<NodeFunctionDeclerationArgument*> parseFunctionDeclerationArguments() {
+    std::vector<NodeFunctionDeclerationArgument*> parseFunctionDeclerationArguments(bool* is_function) {
         std::vector<NodeFunctionDeclerationArgument*> node_arguments;
         if (m_tokens_pointer->getTokenType() != TokenType::_open_paren) {
             printError("Expected `(`", m_tokens_pointer->getLine(), m_tokens_pointer->getChar());
@@ -917,7 +934,7 @@ public:
         printDebug("parsing argument");
         while (true) {
             NodeFunctionDeclerationArgument* node_argument = new NodeFunctionDeclerationArgument();
-            node_argument = parseFunctionDeclerationArgument();
+            node_argument = parseFunctionDeclerationArgument(is_function);
             if (!node_argument) break;
 
             node_arguments.push_back(node_argument);
@@ -996,10 +1013,22 @@ public:
     }
 
 
-    NodeFunctionDecleration* parseFunction() {
-        printDebug("parsing function");
+    NodeFunctionDecleration* parseFunctionOrProcedure() {
         NodeFunctionDecleration* node_function = new NodeFunctionDecleration();
-        if (m_tokens_pointer->getTokenType() == TokenType::_function) {
+        bool* is_function = nullptr;
+
+        if (m_tokens_pointer->getTokenType() == TokenType::_function || m_tokens_pointer->getTokenType() == TokenType::_procedure) {
+            printDebug(std::to_string(m_tokens_pointer->getTokenType() == TokenType::_procedure));
+
+            if (m_tokens_pointer->getTokenType() == TokenType::_function) {
+                printDebug("parsing function");
+                is_function = new bool(true);
+            } else {
+                printDebug("parsing procedure");
+                is_function = new bool(false);
+                printDebug("set is_function to false");
+            }
+
             m_tokens_pointer++;
 
             printDebug("parsing identifier");
@@ -1008,21 +1037,25 @@ public:
                 printDebug("parsed identifier");
 
                 printDebug("parsing arguments");
-                node_function->_arguments = parseFunctionDeclerationArguments();
+                node_function->_arguments = parseFunctionDeclerationArguments(is_function);
                 printDebug("parsed arguments: " + std::to_string((node_function->_arguments).size()));
 
                 if (m_tokens_pointer->getTokenType() != TokenType::_returns) {
+                    if (is_function && *is_function == true)
                     printError("Expected `returns`", m_tokens_pointer->getLine(), m_tokens_pointer->getChar());
+
                 } else {
                     m_tokens_pointer++;
+
+                    if (m_tokens_pointer < m_tokens.end() && isType(&(*m_tokens_pointer))) {
+                        node_function->_return_type = &(*m_tokens_pointer);
+                        m_tokens_pointer++;
+
+                    } else {
+                        printError("Expected type", m_tokens_pointer->getLine(), m_tokens_pointer->getChar());
+                    }
                 }
 
-                if (m_tokens_pointer < m_tokens.end() && isType(&(*m_tokens_pointer))) {
-                    node_function->_return_type = &(*m_tokens_pointer);
-                    m_tokens_pointer++;
-                } else {
-                    printError("Expected type", m_tokens_pointer->getLine(), m_tokens_pointer->getChar());
-                }
 
                 if (m_tokens_pointer < m_tokens.end() && m_tokens_pointer->getTokenType() == TokenType::_assign) {
                     m_tokens_pointer++;
@@ -1053,14 +1086,15 @@ public:
             printError("Shouldnt reach here");
         }
 
+        node_function->is_function = new bool(*is_function);
         return node_function;
     }
 
     NodeProgramElement* parseElement() {
         NodeProgramElement* node_program_element = new NodeProgramElement();
-        if (m_tokens_pointer->getTokenType() == TokenType::_function) {
-            printDebug("parsing function...");
-            NodeFunctionDecleration* function_decleration = parseFunction();
+        if (m_tokens_pointer->getTokenType() == TokenType::_function || m_tokens_pointer->getTokenType() == TokenType::_procedure) {
+            printDebug("parsing function or procedure...");
+            NodeFunctionDecleration* function_decleration = parseFunctionOrProcedure();
             if (!function_decleration) return nullptr;
 
             node_program_element->_element = function_decleration;
