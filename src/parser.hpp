@@ -85,9 +85,12 @@ struct NodeDecleration {
     NodeExpression* _expression;
 };
 
-
+struct NodeCall {
+    NodeFunctionCall* _function_call;
+};
 
 struct NodeFunctionDeclerationArgument {
+    Token* _qualifier;
     Token* _type;
     NodeIdentifier* _identifier;
 };
@@ -133,7 +136,7 @@ struct NodeStream {
 
 
 struct NodeStatement {
-    std::variant<NodeDecleration*, NodeBlock*, NodeControl*, NodeStatementToken*, NodeReturn*, NodeStream*, NodeLoop*> _statement;
+    std::variant<NodeDecleration*, NodeBlock*, NodeControl*, NodeStatementToken*, NodeReturn*, NodeStream*, NodeLoop*, NodeCall*> _statement;
 };
 
 class Parser {
@@ -254,14 +257,19 @@ public:
             printDebug(output.str() + "[procedure Decleration] `" + function_decleration->_identifier->_token->getStrValue() + "`");
 
             output << "    ";
-            
+
         } else {
             printError("Invalid function or procedure decleration");
         }
 
         printDebug(output.str() + "[arguments] `");
         for (std::vector<NodeFunctionDeclerationArgument*>::iterator i = function_decleration->_arguments.begin(); i < function_decleration->_arguments.end(); i++) {
-            printDebug(output.str() + "    " + (*i)->_type->getStrValue() + ": " + (*i)->_identifier->_token->getStrValue());
+            if (*(function_decleration->is_function) == false) {
+                printDebug(output.str() + "    " + (*i)->_qualifier->getStrValue()+ " " + (*i)->_type->getStrValue() + ": " + (*i)->_identifier->_token->getStrValue());
+
+            } else if (*(function_decleration->is_function) == true) {
+                printDebug(output.str() + "    " + (*i)->_type->getStrValue() + ": " + (*i)->_identifier->_token->getStrValue());
+            }
         }
 
         if (function_decleration->_expression) {
@@ -279,6 +287,18 @@ public:
         } else if (std::holds_alternative<NodeFunctionDecleration*>(program_element->_element)) {
             NodeFunctionDecleration* function_decleration = std::get<NodeFunctionDecleration*>(program_element->_element);
             printFunctionDecleration(function_decleration, indent);
+        }
+    }
+
+    void printCallArguments(NodeFunctionCall* node_function_call, int indent) {
+        int tab_count = 0;
+        std::stringstream output;
+        while (tab_count++ < indent) {
+            output << "    ";
+        }
+
+        for (std::vector<NodeFunctionCallArgument*>::iterator i = node_function_call->_arguments.begin(); i < node_function_call->_arguments.end(); i++) {
+            printExpression((*i)->_expression, indent + 1);
         }
     }
 
@@ -362,6 +382,13 @@ public:
             if (node_return->_expression) {
                 printExpression(node_return->_expression, indent + 1);
             }
+
+        } else if (std::holds_alternative<NodeCall*>(statement->_statement)) {
+            NodeCall* node_call = std::get<NodeCall*>(statement->_statement);
+            printDebug(output.str() + "[call]");
+            printDebug(output.str() + "    " + node_call->_function_call->_identifier->_token->getStrValue() + " (");
+            printCallArguments(node_call->_function_call, indent + 1);
+            printDebug(output.str() + "    " + ")");
 
         } else {
             printDebug("1");
@@ -808,6 +835,31 @@ public:
             statement->_statement = node_return;
         }
 
+        else if (m_tokens_pointer->getTokenType() == TokenType::_call) {
+            printDebug("parsing `call`");
+            
+            NodeCall* node_call = new NodeCall();
+            m_tokens_pointer++;
+
+            if (isIdentifier()) {
+                printDebug("found identifier afer `call`");
+
+                node_call->_function_call = new NodeFunctionCall();
+                node_call->_function_call->_identifier = new NodeIdentifier();
+                node_call->_function_call->_identifier->_token = &(*m_tokens_pointer);
+                m_tokens_pointer++;
+
+                node_call->_function_call->_arguments = parseFunctionCallArguments();
+
+                parseSemi();
+                statement->_statement = node_call;
+            } else {
+                printError("Expected identifier after `call`", m_tokens_pointer->getLine(), m_tokens_pointer->getChar());
+            }
+            
+
+        }
+
         else if (NodeDecleration* declaration = parseDecleration()) {
             printOk("Decleration parsed");
             if (declaration) {
@@ -884,12 +936,18 @@ public:
 
     NodeFunctionDeclerationArgument* parseFunctionDeclerationArgument(bool* is_function) {
         printDebug("parsing DeclerationArgument");
+        
+        if (*is_function || isQualifier(&(*m_tokens_pointer))) {
+            NodeFunctionDeclerationArgument* node_argument = new NodeFunctionDeclerationArgument();
 
-        if (*is_function || (m_tokens_pointer++)->getTokenType() == TokenType::_var) {
+            if (!*is_function) {
+                node_argument->_qualifier = &(*m_tokens_pointer);
+                m_tokens_pointer++;
+            }
+
             if (isType(&(*m_tokens_pointer))) {
                 printDebug("found type");
 
-                NodeFunctionDeclerationArgument* node_argument = new NodeFunctionDeclerationArgument();
 
                 node_argument->_type = &(*m_tokens_pointer);
                 m_tokens_pointer++;
