@@ -1,1 +1,1 @@
-call p(); /* Aliasing, this is an error. */
+qa -> std_output;
