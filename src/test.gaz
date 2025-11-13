@@ -63,9 +63,6 @@ function square(integer n) returns integer = n * n;
 var integer result = square(5);
 var integer total = add(square(2), square(3));
 
-var integer x = 10
-function foo(integer x) = x + 1;
-const integer x = 5 + ;
 
 struct Person(string name, integer age);
 
@@ -82,3 +79,6 @@ procedure main()
 }
 
 // should fail
+var integer x = 10
+function foo(integer x) = x + 1;
+const integer x = 5 + ;
