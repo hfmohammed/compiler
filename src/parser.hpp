@@ -196,7 +196,6 @@ public:
 
         printIdentifier(_struct->_type, indent);
         printFunctionDeclerationArguments(_struct->_arguments, indent, false);
-
     }
 
     void printTuple(NodeTuple* node_tuple, int indent) {
@@ -304,7 +303,7 @@ public:
 
         if (std::holds_alternative<NodeIdentifier*>(decleration->_identifier)) {
             NodeIdentifier* node_identifier = std::get<NodeIdentifier*>(decleration->_identifier);
-            printIdentifier(node_identifier, indent);
+            if (node_identifier) printIdentifier(node_identifier, indent);
 
         } else if (std::holds_alternative<NodeTupleIdentifier*>(decleration->_identifier)) {
             NodeTupleIdentifier* node_tuple_identifier = std::get<NodeTupleIdentifier*>(decleration->_identifier);
