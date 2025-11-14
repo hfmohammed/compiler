@@ -1,2 +1,1 @@
-tuple(integer, real, integer[10]) t1;
-tuple(character, real, character[256], real) t2;
+var x = 2;
