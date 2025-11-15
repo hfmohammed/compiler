@@ -1439,12 +1439,18 @@ public:
                 return new NodeType{._type = node_type_vector};
             }
 
+            else if (_isTokenType(TokenType::_tuple)) {
+                m_tokens_pointer++;
+
+                NodeTypeTuple* node_type_tuple = parseTypeTuple();
+                return new NodeType{._type = node_type_tuple};
+            }
+
             m_tokens_pointer++;
             return node_type;
         
         } else if (raise_error) {
             printError("Expected type");
-
         }
 
         return nullptr;
@@ -1461,10 +1467,9 @@ public:
             }
 
             if (isType(&(*m_tokens_pointer))) {
-                printDebug("found type");
-
-
+                
                 node_argument->_type = parseType();
+                printOk("parsed type");
 
                 if (m_tokens_pointer < m_tokens.end() && _isTokenType(TokenType::_identifier)) {
                     node_argument->_identifier = parseIdentifier();
