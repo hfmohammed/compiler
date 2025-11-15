@@ -155,7 +155,7 @@ struct NodeFunctionDecleration {
 };
 
 struct NodeProgramElement {
-    std::variant<NodeStatement*, NodeFunctionDecleration*> _element;
+    std::variant<NodeStatement*, NodeFunctionDecleration*, NodeTypealias*> _element;
 };
 
 struct NodeBlock {
@@ -184,7 +184,7 @@ struct NodeStream {
 };
 
 struct NodeStatement {
-    std::variant<NodeDecleration*, NodeBlock*, NodeControl*, NodeStatementToken*, NodeReturn*, NodeStream*, NodeLoop*, NodeCall*, NodeTypealias*> _statement;
+    std::variant<NodeDecleration*, NodeBlock*, NodeControl*, NodeStatementToken*, NodeReturn*, NodeStream*, NodeLoop*, NodeCall*> _statement;
 };
 
 class Parser {
@@ -500,6 +500,10 @@ public:
         } else if (std::holds_alternative<NodeFunctionDecleration*>(program_element->_element)) {
             NodeFunctionDecleration* function_decleration = std::get<NodeFunctionDecleration*>(program_element->_element);
             printFunctionDecleration(function_decleration, indent);
+
+        } else if (std::holds_alternative<NodeTypealias*>(program_element->_element)) {
+            NodeTypealias* node_typealias = std::get<NodeTypealias*>(program_element->_element);
+            printTypealias(node_typealias, indent);
         }
     }
 
@@ -593,10 +597,6 @@ public:
             printDebug(output_prefix + "    " + node_call->_function_call->_identifier->_token->getStrValue() + " (");
             printCallArguments(node_call->_function_call, indent + 1);
             printDebug(output_prefix + "    " + ")");
-
-        } else if (std::holds_alternative<NodeTypealias*>(statement->_statement)) {
-            NodeTypealias* node_typealias = std::get<NodeTypealias*>(statement->_statement);
-            printTypealias(node_typealias, indent);
 
         } else {
             printDebug("1");
@@ -695,6 +695,7 @@ public:
     }
 
     bool isOperator(Token* token) {
+        printDebug(token->getStrValue());
         switch (token->getTokenType())
         {
             case TokenType::_period:
@@ -721,6 +722,8 @@ public:
             case TokenType::_or:
             case TokenType::_xor:
             case TokenType::_dbl_vertical_line:
+            case TokenType::_in:
+            case TokenType::_vert_line:
                 return true;
             default:
                 return false;
@@ -799,8 +802,6 @@ public:
                 m_tokens_pointer++;
             }
         }
-
-        printDebug("DONE PAARsing: " + m_tokens_pointer->getStrValue());
 
         node_expression->_expression = node_tuple;
         return node_expression;
@@ -954,6 +955,7 @@ public:
     }
 
     NodeList* parseList() {
+        printDebug("parsing list");
         NodeList* node_list = new NodeList();
         NodeExpression* node_expression = new NodeExpression();
         while (node_expression = parseExpression()) {
@@ -1058,14 +1060,7 @@ public:
                 is_struct_decleration = true;
                 decleration->_type = node_struct;
 
-            } else if (_isTokenType(TokenType::_tuple)) {
-                m_tokens_pointer++;
-                
-                decleration->_type = parseTypeTuple(1);
-                is_decleration = true;
-            
             } else {
-                
                 decleration->_type = parseType(1);
                 printOk("found type");
                 is_decleration = true;
@@ -1285,16 +1280,6 @@ public:
                 printError("Expected identifier after `call`", m_tokens_pointer->getLine(), m_tokens_pointer->getChar());
             }
 
-        }
-
-        else if (_isTokenType(TokenType::_typealias)) {
-            parseToken(TokenType::_typealias);
-            NodeTypealias* node_typealias = new NodeTypealias();
-            node_typealias->_original = parseType(1);
-            node_typealias->_new = parseToken(TokenType::_identifier);
-            m_types.push_back(node_typealias->_new->getStrValue());
-            parseSemi();
-            statement->_statement = node_typealias;
         }
 
         else {
@@ -1671,8 +1656,19 @@ public:
             if (!function_decleration) return nullptr;
 
             node_program_element->_element = function_decleration;
-
-        } else {
+        }        
+        
+        else if (_isTokenType(TokenType::_typealias)) {
+            parseToken(TokenType::_typealias);
+            NodeTypealias* node_typealias = new NodeTypealias();
+            node_typealias->_original = parseType(1);
+            node_typealias->_new = parseToken(TokenType::_identifier);
+            m_types.push_back(node_typealias->_new->getStrValue());
+            parseSemi();
+            node_program_element->_element = node_typealias;
+        }
+        
+        else {
             printDebug("parsing statement in parseElement...");
             NodeStatement* statement = parseStatement();
             if (!statement) return nullptr;
