@@ -1,2 +1,2 @@
-tuple(integer, real, integer[10]) t1;
-tuple(character, real, character[256], real) t2;
+function f(tuple(integer, boolean) x) returns tuple(integer, boolean) {}
+typealias tuple(integer, boolean) Pair;
