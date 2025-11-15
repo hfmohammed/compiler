@@ -85,3 +85,5 @@ procedure main()
 
 a, b = (2, 3);
 tuple(integer, string, boolean[10]) a, b = (1.0, 2.0);
+
+var k = 2 + a()[1];

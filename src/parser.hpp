@@ -94,8 +94,12 @@ struct NodeTuple {
     std::vector<NodeExpression*> _expressions;
 };
 
+struct NodeArrayIndex {
+    NodeExpression* _index;
+};
+
 struct NodeExpression {
-    std::variant<NodeExpressionBinary*, NodeInteger*, NodeString*, NodeIdentifier*, NodeBoolean*, NodeExpressionUnary*, NodeCharacter*, NodeGenerator*, NodeFunctionCall*, NodeTuple*> _expression;
+    std::variant<NodeExpressionBinary*, NodeInteger*, NodeString*, NodeIdentifier*, NodeBoolean*, NodeExpressionUnary*, NodeCharacter*, NodeGenerator*, NodeFunctionCall*, NodeTuple*, NodeArrayIndex*> _expression;
 };
 
 struct NodeFunctionDeclerationArgument {
@@ -237,6 +241,7 @@ public:
             printDebug(output_prefix + node_string->_value);
 
         } else if (std::holds_alternative<NodeIdentifier*>(expression->_expression)) {
+            printDebug("aaaa");
             NodeIdentifier* node_identifier = std::get<NodeIdentifier*>(expression->_expression);
             printIdentifier(node_identifier, indent + 1);
 
@@ -251,7 +256,8 @@ public:
         } else if (std::holds_alternative<NodeFunctionCall*>(expression->_expression)) {
             NodeFunctionCall* node_function_call = std::get<NodeFunctionCall*>(expression->_expression);
             printDebug(output_prefix + "[function call]");
-            printDebug(output_prefix + node_function_call->_identifier->_token->getStrValue() + "(");
+            printIdentifier(node_function_call->_identifier, indent + 1);
+            printDebug(output_prefix + "(");
 
             for (std::vector<NodeFunctionCallArgument*>::iterator i = node_function_call->_arguments.begin(); i < node_function_call->_arguments.end(); i++) {
                 printExpression((*i)->_expression, indent + 1);
@@ -263,6 +269,12 @@ public:
             printDebug(output_prefix + node_expression_unary->_operator->_token->getStrValue() + " (");
             printExpression(node_expression_unary->_expression, indent + 1);
             printDebug(output_prefix + ")");
+
+        } else if (std::holds_alternative<NodeArrayIndex*>(expression->_expression)) {
+            NodeArrayIndex* node_array_index = std::get<NodeArrayIndex*>(expression->_expression);
+            printDebug(output_prefix + "[array index] [");
+            printExpression(node_array_index->_index, indent + 1);
+            printDebug(output_prefix + "]");
 
         } else {
             printError("expression doesn't hold the required alternative: " + std::string(typeid(expression->_expression).name()));
@@ -806,20 +818,34 @@ public:
 
         } else if (_isTokenType(TokenType::_identifier)) {
             NodeIdentifier* identifier = parseIdentifier();
+            lhs->_expression = identifier;
 
-            if (_isTokenType(TokenType::_open_paren)) {
-                std::vector<NodeFunctionCallArgument*> function_call_arguments = parseFunctionCallArguments();
-                NodeFunctionCall* function_call = new NodeFunctionCall();
-                function_call->_arguments = function_call_arguments;
-                function_call->_identifier = identifier;
-                
-                lhs->_expression = function_call;
-                printDebug("Added function call with arguments: " + std::to_string(function_call_arguments.size()));
+            while (_isTokenType(TokenType::_open_paren) || _isTokenType(TokenType::_open_square)) {
+                if (_isTokenType(TokenType::_open_paren)) {
+                    std::vector<NodeFunctionCallArgument*> function_call_arguments = parseFunctionCallArguments();
+                    NodeFunctionCall* function_call = new NodeFunctionCall();
+                    function_call->_arguments = function_call_arguments;
+                    function_call->_identifier = identifier;
+                    
+                    lhs->_expression = function_call;
+                    printDebug("Added function call with arguments: " + std::to_string(function_call_arguments.size()));
 
-            } else {
-                lhs->_expression = identifier;
-                printDebug("Added identifier");
+                } else if (_isTokenType(TokenType::_open_square)) {
+                    m_tokens_pointer++;
+                    NodeArrayIndex* node_array = new NodeArrayIndex();
+                    node_array->_index = parseExpression();
+
+                    if (!_isTokenType(TokenType::_close_square)) {
+                        printError("Expected `]`", m_tokens_pointer->getLine(), m_tokens_pointer->getChar());
+                    } else {
+                        m_tokens_pointer++;
+                    }
+
+                    lhs->_expression = node_array;
+                } 
             }
+
+            printDebug("Added identifier");
 
         } else if (_isTokenType(TokenType::_generator)) {
             NodeGenerator* _generator = new NodeGenerator{._token = &(*m_tokens_pointer)};
