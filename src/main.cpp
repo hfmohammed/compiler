@@ -6,6 +6,7 @@
 
 #include "./tokenization.hpp"
 #include "./parser.hpp"
+#include "./generator.hpp"
 
 int main(int argc, char* argv[]) {
     if (argc != 2) {
@@ -29,7 +30,9 @@ int main(int argc, char* argv[]) {
     std::vector<Token> tokens = tokenizer.tokenize();
 
     Parser parser(tokens);
-    parser.parse();
+    NodeProgram* program = parser.parse();
+
+    Generator generator(tokens, program);
 
     return EXIT_SUCCESS;
 }
