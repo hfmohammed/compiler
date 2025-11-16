@@ -24,7 +24,6 @@ struct NodeTupleIdentifier {
 
 struct NodeIdentifierToken {
     Token* _token;
-    NodeIdentifier* _access_token;
 };
 
 struct NodeBoolean {
@@ -104,6 +103,7 @@ struct NodeArrayIndex {
 
 struct NodeIdentifier {
     std::variant<NodeIdentifierToken*, NodeTupleIdentifier*, NodeArrayIndex*, NodeFunctionCall*> _identifier;
+    NodeIdentifier* _access_token;
 };
 
 struct NodeAssign {
@@ -455,15 +455,17 @@ public:
         std::string output_prefix = getDebugPrefix(indent);
 
         printToken(identifier->_token, indent);
-
-        if (identifier->_access_token) {
-            printIdentifier(identifier->_access_token, indent);
-        }
     }
 
     void printIdentifier(NodeIdentifier* identifier, int indent) {
         std::string output_prefix = getDebugPrefix(indent);
         printDebug("printing identifier");
+
+        if (identifier->_access_token) {
+            printDebug(output_prefix + ". (");
+            printIdentifier(identifier->_access_token, indent + 1);
+            printDebug(output_prefix + ")");
+        }
 
         if (std::holds_alternative<NodeIdentifierToken*>(identifier->_identifier)) {
             printDebug("printing NodeIdentifierToken");
@@ -501,6 +503,8 @@ public:
         } else {
             printError("couldnt find identifier");
         }
+
+
     }
 
     void printFunctionDecleration(NodeFunctionDecleration* function_decleration, int indent) {
@@ -1453,6 +1457,17 @@ public:
             node_identifier->_identifier = node_identifier_token;
             m_tokens_pointer++;
 
+            while (main != -1 && _isTokenType(TokenType::_period)) {
+                m_tokens_pointer++;
+
+                NodeIdentifier* new_identifier = new NodeIdentifier();
+
+                new_identifier->_identifier = node_identifier_token;
+                new_identifier->_access_token = parseIdentifier();
+
+                node_identifier = new_identifier;
+            }
+
             
             if (main == 0) {
                 while (_isTokenType(TokenType::_open_square) || _isTokenType(TokenType::_open_paren)) {
@@ -1484,10 +1499,6 @@ public:
 
             }
             
-            if (main != -1 && _isTokenType(TokenType::_period)) {
-                m_tokens_pointer++;
-                node_identifier_token->_access_token = parseIdentifier(true, -1);
-            }
 
             printDebug("returning from parseIdentifier");
             return node_identifier;

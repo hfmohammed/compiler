@@ -83,14 +83,20 @@ procedure main()
 // var integer x = 10
 // function foo(integer x) = x + 1;
 // const integer x = 5 + ;
+// call a[1]()[2];
 
 a, b = (2, 3);
 tuple(integer, string, boolean[10]) a, b = (1.0, 2.0);
 
-var k = 2 + a[1]();
+var k = 2 + a[1]()[2]();
+call a[1]()[2]();
 
 integer[*][*] A;
 var k = a[2][2].x;
 
 x = y;
 a, b = (3.14, 1.5);
+
+a = b.c.d.e;
+
+function f() returns tuple(integer, boolean) {}
