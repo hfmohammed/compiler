@@ -516,8 +516,6 @@ public:
         else if (isIdentifier(content)) {
             return Token(TokenType::_identifier, content, line, _char);
         
-        } else if (isGenerator(content)) {
-            return Token(TokenType::_generator, content, line, _char);
         }
 
         printError("Unexpected token", line, _char);
@@ -553,7 +551,7 @@ public:
         return true;
     }
 
-    bool isGenerator(std::string content) {
+    bool isRange(std::string content) {
         printDebug("checking is generator");
         bool found_1 = false;
         bool found_2 = false;
@@ -564,6 +562,7 @@ public:
             else if (*s == '.') found_1 = true;
             printDebug(std::string(1, *s) + " " + std::to_string(found_1) + " " + std::to_string(found_2));
         }
+        printDebug(std::to_string(found_1 && found_2));
         return found_1 && found_2;
     }
 
@@ -804,16 +803,22 @@ public:
                 
                 // handle .
                 else {
-                    if (isNumber(buffer) && *it == '.') {
+                    if (isNumber(buffer) && *it == '.' && buffer.find('.') == std::string::npos) {
                         buffer += '.';
-                        if (!(isNumber(buffer))) {
-                            if (buffer.back() != '.' || (buffer.size() > 1 && buffer[buffer.size() - 2] != '.')) {
-                                printError("Invalid number", line, _char);
-                            }
+                    }
+                    else {
+                        if (buffer.back() == '.' && *it == '.') {
+                            buffer.pop_back();
+                            it--;
+                            _char--;
                         }
-                    } else {
-                        m_tokens.push_back(getToken(buffer, line, _char));
-                        buffer = "";
+
+                        if (!buffer.empty()) {
+                            m_tokens.push_back(getToken(buffer, line, _char));
+                        }
+
+                        buffer.clear();
+
                         it--;
                         _char--;
                     }
