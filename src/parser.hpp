@@ -222,12 +222,16 @@ private:
     std::vector<std::string> m_types;
     std::unordered_map<std::string, NodeType*> m_typealias_map;
     std::vector<Token>::iterator m_tokens_pointer;
-public:
-    Parser(std::vector<Token>& tokens) {
-        m_program = new NodeProgram();
-        m_tokens = tokens;
-        m_tokens_pointer = m_tokens.begin();
-    }
+    public:
+        Parser() {
+            m_program = new NodeProgram();
+        }
+
+        Parser(std::vector<Token>& tokens) {
+            m_program = new NodeProgram();
+            m_tokens = tokens;
+            m_tokens_pointer = m_tokens.begin();
+        }
 
     void printStruct(NodeStruct* _struct, int indent) {
         printDebug("printing struct");
@@ -1868,20 +1872,20 @@ public:
     NodeProgram* parseProgram() {
         printDebug("parsing program...");
         
+        while (_isTokenType(TokenType::_typealias) && m_tokens_pointer < m_tokens.end()) {
+            parseToken(TokenType::_typealias);
+            NodeTypealias* node_typealias = new NodeTypealias();
+            node_typealias->_original = parseType(1);
+            node_typealias->_new = parseToken(TokenType::_identifier);
+            m_types.push_back(node_typealias->_new->getStrValue());
+            m_typealias_map[node_typealias->_new->getStrValue()] = node_typealias->_original;
+            parseSemi();
+
+            NodeProgramElement* node_program_element = new NodeProgramElement{._element=node_typealias};
+            m_program->_elements.push_back(node_program_element);
+        }
+
         while (m_tokens_pointer < m_tokens.end()) {
-            while (_isTokenType(TokenType::_typealias)) {
-                parseToken(TokenType::_typealias);
-                NodeTypealias* node_typealias = new NodeTypealias();
-                node_typealias->_original = parseType(1);
-                node_typealias->_new = parseToken(TokenType::_identifier);
-                m_types.push_back(node_typealias->_new->getStrValue());
-                m_typealias_map[node_typealias->_new->getStrValue()] = node_typealias->_original;
-                parseSemi();
-
-                NodeProgramElement* node_program_element = new NodeProgramElement{._element=node_typealias};
-                m_program->_elements.push_back(node_program_element);
-            }
-
             if (NodeProgramElement* node_program_element = parseElement()) {
                 m_program->_elements.push_back(node_program_element);
             } else {

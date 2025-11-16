@@ -32,7 +32,8 @@ int main(int argc, char* argv[]) {
     Parser parser(tokens);
     NodeProgram* program = parser.parse();
 
-    Generator generator(tokens, program);
+    Generator generator(program);
+    generator.generate();
 
     return EXIT_SUCCESS;
 }

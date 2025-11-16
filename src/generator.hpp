@@ -7,12 +7,19 @@ class Generator {
         NodeProgram* m_program;
     public:
 
-    Generator(std::vector<Token>& tokens, NodeProgram* program) {
+    Generator(NodeProgram* program) {
         printDebug("================= Generator ===============");
         m_program = program;
+    }
 
-        Parser Parser(tokens);
-        Parser.printProgram(m_program);
+    void generate() {
+        generateProgram(m_program);
+        printDebug("================= Generation complete ===============");
+    }
+
+    void generateProgram(NodeProgram* program) {
+        Parser Parser;
+        Parser.printProgram(program);
     }
 
     void printError(std::string error_msg) {
