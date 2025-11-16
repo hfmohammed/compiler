@@ -54,6 +54,10 @@ struct NodeRange {
 
 struct NodeList {
     std::vector<NodeExpression*> _items;
+    
+    int length() const {
+        return static_cast<int>(_items.size());
+    }
 };
 
 struct NodeTypeVector {
@@ -131,10 +135,17 @@ struct NodeFunctionDeclerationArgument {
 struct NodeStruct {
     NodeIdentifier* _type;
     std::vector<NodeFunctionDeclerationArgument*> _arguments;
+    int length() const {
+        return static_cast<int>(_arguments.size());
+    }
 };
 
 struct NodeTypeTuple {
     std::vector<NodeType*> _types;
+    
+    int length() const {
+        return static_cast<int>(_types.size());
+    }
 };
 
 struct NodeTypeArray {
@@ -1890,12 +1901,12 @@ public:
         return;
     }
 
-    void parse() {
+    NodeProgram* parse() {
         printDebug("================= Parser ===============");
         printDebug(std::to_string(m_tokens.size()));
-        printTokens();
+        // printTokens();
         parseProgram();
-        printProgram(m_program);
-        return;
+        // printProgram(m_program);
+        return m_program;
     }
 };
