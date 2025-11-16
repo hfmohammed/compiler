@@ -11,6 +11,7 @@
 struct NodeExpression;
 struct NodeStatement;
 struct NodeType;
+struct NodeIdentifierToken;
 struct NodeIdentifier;
 
 struct NodeOperator {
@@ -21,7 +22,7 @@ struct NodeTupleIdentifier {
     std::vector<NodeIdentifier*> _identifiers;
 };
 
-struct NodeIdentifier {
+struct NodeIdentifierToken {
     Token* _token;
     NodeIdentifier* _access_token;
 };
@@ -98,11 +99,15 @@ struct NodeTuple {
 
 struct NodeArrayIndex {
     NodeIdentifier* _identifier;
-    NodeExpression* _index;
+    NodeExpression* _expression;
+};
+
+struct NodeIdentifier {
+    std::variant<NodeIdentifierToken*, NodeTupleIdentifier*, NodeArrayIndex*, NodeFunctionCall*> _identifier;
 };
 
 struct NodeExpression {
-    std::variant<NodeExpressionBinary*, NodeInteger*, NodeString*, NodeIdentifier*, NodeBoolean*, NodeExpressionUnary*, NodeCharacter*, NodeGenerator*, NodeFunctionCall*, NodeTuple*, NodeArrayIndex*, NodeList*> _expression;
+    std::variant<NodeExpressionBinary*, NodeInteger*, NodeString*, NodeBoolean*, NodeExpressionUnary*, NodeCharacter*, NodeGenerator*, NodeFunctionCall*, NodeTuple*, NodeIdentifier*, NodeList*> _expression;
 };
 
 struct NodeFunctionDeclerationArgument {
@@ -137,7 +142,7 @@ struct NodeTypealias {
 struct NodeDecleration {
     NodeQualifier* _qualifier;
     std::variant<NodeStruct*, Token*, NodeTypeTuple*, NodeType*> _type;
-    std::variant<NodeIdentifier*, NodeTupleIdentifier*> _identifier;
+    std::variant<NodeIdentifierToken*, NodeTupleIdentifier*, NodeIdentifier*> _identifier;
     NodeExpression* _expression;
 };
 
@@ -201,9 +206,13 @@ public:
     }
 
     void printStruct(NodeStruct* _struct, int indent) {
+        printDebug("printing struct");
+
         std::string output_prefix = getDebugPrefix(indent);
 
         printIdentifier(_struct->_type, indent);
+
+        printDebug("printing arguments");
         printFunctionDeclerationArguments(_struct->_arguments, indent, false);
     }
 
@@ -274,12 +283,6 @@ public:
             printExpression(node_expression_unary->_expression, indent + 1);
             printDebug(output_prefix + ")");
 
-        } else if (std::holds_alternative<NodeArrayIndex*>(expression->_expression)) {
-            NodeArrayIndex* node_array_index = std::get<NodeArrayIndex*>(expression->_expression);
-            printDebug(output_prefix + node_array_index->_identifier->_token->getStrValue() + " [");
-            printExpression(node_array_index->_index, indent + 1);
-            printDebug(output_prefix + "]");
-
         } else if (std::holds_alternative<NodeList*>(expression->_expression)) {
             NodeList* node_list = std::get<NodeList*>(expression->_expression);
             printList(node_list, indent + 1);
@@ -302,20 +305,15 @@ public:
     void printDecleration(NodeDecleration* decleration, int indent) {
         std::string output_prefix = getDebugPrefix(indent);
         
+        // print qualifier
         if (decleration->_qualifier) {
             printDebug(output_prefix + decleration->_qualifier->_token->getStrValue());
         } else {
             printDebug(output_prefix + "[No qualifier]");
         }
 
-        if (std::holds_alternative<NodeStruct*>(decleration->_type)) {
-            NodeStruct* node_struct = std::get<NodeStruct*>(decleration->_type);
-            if (node_struct != nullptr) {
-                printDebug(output_prefix + "[struct Type]");
-                printStruct(node_struct, indent);
-            }
-            
-        } else if (std::holds_alternative<Token*>(decleration->_type))  {
+        // print type
+        if (std::holds_alternative<Token*>(decleration->_type))  {
             Token* token = std::get<Token*>(decleration->_type);
             if (token != nullptr) {
                 printDebug(output_prefix + token->getStrValue());
@@ -337,13 +335,21 @@ public:
             printDebug(output_prefix + "[No type]");
         }
 
-        if (std::holds_alternative<NodeIdentifier*>(decleration->_identifier)) {
+        if (std::holds_alternative<NodeStruct*>(decleration->_type)) {
+            NodeStruct* node_struct = std::get<NodeStruct*>(decleration->_type);
+            if (node_struct != nullptr) {
+                printDebug(output_prefix + "[struct Type]");
+                printStruct(node_struct, indent);
+            }
+        }
+
+        // print identifier
+        else if (std::holds_alternative<NodeIdentifier*>(decleration->_identifier)) {
             NodeIdentifier* node_identifier = std::get<NodeIdentifier*>(decleration->_identifier);
             if (node_identifier) printIdentifier(node_identifier, indent);
-
-        } else if (std::holds_alternative<NodeTupleIdentifier*>(decleration->_identifier)) {
-            NodeTupleIdentifier* node_tuple_identifier = std::get<NodeTupleIdentifier*>(decleration->_identifier);
-            printTupleIdentifier(node_tuple_identifier, indent);
+        
+        } else {
+            printError("Invalid identifier");
         }
 
         if (decleration->_expression != NULL) {
@@ -357,16 +363,6 @@ public:
     void printVectorType(NodeTypeVector* node_type_vector, int indent) {
         std::string output_prefix = getDebugPrefix(indent);
         printType(node_type_vector->_type, indent);
-        
-    }
-
-    void printTupleIdentifier(NodeTupleIdentifier* node_tuple_identifier, int indent) {
-        std::string output_prefix = getDebugPrefix(indent);
-        printDebug(output_prefix + "[tuple identifier]");
-        
-        for (auto identifier : node_tuple_identifier->_identifiers) {
-            printIdentifier(identifier, indent + 1);
-        }
     }
 
     void printType(NodeType* node_type, int indent) {
@@ -433,13 +429,55 @@ public:
         }
     }
 
-    void printIdentifier(NodeIdentifier* identifier, int indent, std::string prefix="") {
+    void printIdentifierToken(NodeIdentifierToken* identifier, int indent, std::string prefix="") {
         std::string output_prefix = getDebugPrefix(indent);
 
         printDebug(output_prefix + prefix + identifier->_token->getStrValue());
 
         if (identifier->_access_token) {
-            printIdentifier(identifier->_access_token, indent, prefix="  [chain identifier] ");
+            printIdentifier(identifier->_access_token, indent);
+        }
+    }
+
+    void printIdentifier(NodeIdentifier* identifier, int indent) {
+        std::string output_prefix = getDebugPrefix(indent);
+        printDebug("printing identifier");
+
+        if (std::holds_alternative<NodeIdentifierToken*>(identifier->_identifier)) {
+            printDebug("printing NodeIdentifierToken");
+            NodeIdentifierToken* node_identifier_token = std::get<NodeIdentifierToken*>(identifier->_identifier);
+            printIdentifierToken(node_identifier_token, indent);
+        }
+
+        else if (std::holds_alternative<NodeTupleIdentifier*>(identifier->_identifier)) {
+            printDebug("printing NodeTupleIdentifier");
+
+            NodeTupleIdentifier* node_identifier_tuple = std::get<NodeTupleIdentifier*>(identifier->_identifier);
+            for (auto identifier : node_identifier_tuple->_identifiers) {
+                printIdentifier(identifier, indent);
+            }
+
+        } else if (std::holds_alternative<NodeArrayIndex*>(identifier->_identifier)) {
+            printDebug("found NodeArrayIndex");
+            NodeArrayIndex* node_array_index = std::get<NodeArrayIndex*>(identifier->_identifier);
+            printIdentifier(node_array_index->_identifier, indent);
+
+            printDebug(output_prefix + "[");
+            printExpression(node_array_index->_expression, indent + 1);
+            printDebug(output_prefix + "]");
+
+        } else if (std::holds_alternative<NodeFunctionCall*>(identifier->_identifier)) {
+            printDebug("found NodeFunctionCall");
+            NodeFunctionCall* node_function_call = std::get<NodeFunctionCall*>(identifier->_identifier);
+            printIdentifier(node_function_call->_identifier, indent + 1);
+    
+            printDebug(output_prefix + "(");        
+            printCallArguments(node_function_call, indent + 1);
+            printDebug(output_prefix + ")");
+
+            
+        } else {
+            printError("couldnt find identifier");
         }
     }
 
@@ -450,7 +488,8 @@ public:
         printFunctionDeclerationArguments(function_decleration->_arguments, indent, *(function_decleration->is_procedure));
 
         if (*(function_decleration->is_procedure) == false) {
-            printDebug(output_prefix + "[function Decleration] `" + function_decleration->_identifier->_token->getStrValue() + "`");
+            printDebug(output_prefix + "[function Decleration]");
+            printIdentifier(function_decleration->_identifier, indent);
 
             output_prefix += "    ";
             printDebug(output_prefix + "[returns]");
@@ -475,10 +514,10 @@ public:
     void printFunctionDeclerationArguments(std::vector<NodeFunctionDeclerationArgument*> arguments, int indent, bool is_procedure) {
         std::string output_prefix = getDebugPrefix(indent);
 
+        printDebug(std::to_string(arguments.size()));
         for (auto argument : arguments) {
             if (is_procedure == true) {
                 printQualifier(argument->_qualifier, indent + 1);
-
             }
 
             printType(argument->_type, indent + 1);
@@ -510,8 +549,8 @@ public:
     void printCallArguments(NodeFunctionCall* node_function_call, int indent) {
         std::string output_prefix = getDebugPrefix(indent);
 
-        for (std::vector<NodeFunctionCallArgument*>::iterator i = node_function_call->_arguments.begin(); i < node_function_call->_arguments.end(); i++) {
-            printExpression((*i)->_expression, indent + 1);
+        for (auto argument : node_function_call->_arguments) {
+            printExpression(argument->_expression, indent + 1);
         }
     }
 
@@ -594,9 +633,7 @@ public:
         } else if (std::holds_alternative<NodeCall*>(statement->_statement)) {
             NodeCall* node_call = std::get<NodeCall*>(statement->_statement);
             printDebug(output_prefix + "[call]");
-            printDebug(output_prefix + "    " + node_call->_function_call->_identifier->_token->getStrValue() + " (");
-            printCallArguments(node_call->_function_call, indent + 1);
-            printDebug(output_prefix + "    " + ")");
+            printIdentifier(node_call->_function_call->_identifier, indent + 1);
 
         } else {
             printDebug("1");
@@ -614,9 +651,10 @@ public:
     }
 
     void printProgram(NodeProgram* program){
+        int indent = 0;
+
         printDebug(std::string("printing program ") + std::to_string((program->_elements).size()));
 
-        int indent = 0;
         for (std::vector<NodeProgramElement*>::iterator i = program->_elements.begin(); i < program->_elements.end(); i++) {
             printElement(*i, indent);
         }
@@ -870,35 +908,8 @@ public:
             printDebug("Added boolean");
 
         } else if (_isTokenType(TokenType::_identifier)) {
-            NodeIdentifier* identifier = parseIdentifier();
-            lhs->_expression = identifier;
-
-            while (_isTokenType(TokenType::_open_paren) || _isTokenType(TokenType::_open_square)) {
-                if (_isTokenType(TokenType::_open_paren)) {
-                    std::vector<NodeFunctionCallArgument*> function_call_arguments = parseFunctionCallArguments();
-                    NodeFunctionCall* function_call = new NodeFunctionCall();
-                    function_call->_arguments = function_call_arguments;
-                    function_call->_identifier = identifier;
-                    
-                    lhs->_expression = function_call;
-                    printDebug("Added function call with arguments: " + std::to_string(function_call_arguments.size()));
-
-                } else if (_isTokenType(TokenType::_open_square)) {
-                    m_tokens_pointer++;
-                    NodeArrayIndex* node_array = new NodeArrayIndex();
-                    node_array->_identifier = identifier;
-                    node_array->_index = parseExpression();
-
-                    if (!_isTokenType(TokenType::_close_square)) {
-                        printError("Expected `]`", m_tokens_pointer->getLine(), m_tokens_pointer->getChar());
-                    } else {
-                        m_tokens_pointer++;
-                    }
-
-                    lhs->_expression = node_array;
-                } 
-            }
-
+            printDebug("parsing expression identifier");
+            lhs->_expression = parseIdentifier(true, 0);
             printDebug("Added identifier");
 
         } else if (_isTokenType(TokenType::_generator)) {
@@ -1006,7 +1017,7 @@ public:
             }
 
         } else if (raise_error) {
-            printError("Expected `(`", m_tokens_pointer->getLine(), m_tokens_pointer->getChar());
+            printError("Expected in parse tuple `(`", m_tokens_pointer->getLine(), m_tokens_pointer->getChar());
         }
 
         return node_type_tuple;
@@ -1033,10 +1044,6 @@ public:
 
         printDebug("checking for qualifier at " + std::to_string(m_tokens_pointer - m_tokens.begin()));
         if (isQualifier(&(*m_tokens_pointer))) {
-            if (_isTokenType(TokenType::_tuple, 1)) {
-                printError("tuple cant be declared with a qualifier");
-            }
-
             printOk("found qualifier");
             decleration->_qualifier = parseQualifer();
             printDebug(decleration->_qualifier->_token->getStrValue());
@@ -1044,23 +1051,30 @@ public:
         }
 
         printDebug("checking for type at " + std::to_string(m_tokens_pointer - m_tokens.begin()));
-        if (isType(&(*m_tokens_pointer))) {
-            if (_isTokenType(TokenType::_struct)) {
-                NodeStruct* node_struct = new NodeStruct();
-                printOk("found struct");
-                m_tokens_pointer++;
+        if (_isTokenType(TokenType::_struct)) {
+            NodeStruct* node_struct = new NodeStruct();
+            printOk("found struct");
+            m_tokens_pointer++;
 
-                NodeIdentifier* type = parseIdentifier();
-                node_struct->_type = type;
-                m_types.push_back(type->_token->getStrValue());
-                printOk("found type for struct");
+            NodeIdentifier* type = parseIdentifier(false, -1);
+            node_struct->_type = type;
 
-                node_struct->_arguments = parseFunctionDeclerationArguments(new bool(false));
-                printOk("found parseFunctionDeclerationArguments");
-                is_struct_decleration = true;
-                decleration->_type = node_struct;
+            if (!std::holds_alternative<NodeIdentifierToken*>(type->_identifier)) {
+                printError("Struct identifier doesnt hold token");
+            }
 
-            } else {
+            NodeIdentifierToken* token = std::get<NodeIdentifierToken*>(type->_identifier);
+            m_types.push_back(token->_token->getStrValue());
+            printOk("found type for struct");
+
+            node_struct->_arguments = parseFunctionDeclerationArguments(new bool(false));
+            printOk("found parseFunctionDeclerationArguments");
+            is_struct_decleration = true;
+            decleration->_type = node_struct;
+
+        } else {
+            if ((_isTokenType(TokenType::_identifier) && _isTokenType(TokenType::_identifier, 1)) || isType(&*m_tokens_pointer)) {
+                m_types.push_back(m_tokens_pointer->getStrValue());
                 decleration->_type = parseType(1);
                 printOk("found type");
                 is_decleration = true;
@@ -1071,28 +1085,32 @@ public:
         printDebug(m_tokens_pointer->getStrValue());
         if (_isTokenType(TokenType::_identifier)) {
             is_decleration = true;
-            decleration->_identifier = parseIdentifier();
+            decleration->_identifier = parseIdentifier(true, 0);
+            printOk("parsed NodeIdentifier");
 
-            if (std::holds_alternative<NodeIdentifier*>(decleration->_identifier)) {
+            if (std::holds_alternative<NodeIdentifier*>(decleration->_identifier) && _isTokenType(TokenType::_comma)) {
+                printDebug("holds NodeIdentifier");
+
                 NodeIdentifier* node_identifier = std::get<NodeIdentifier*>(decleration->_identifier);
-                printOk("found identifier");
                 
                 NodeTupleIdentifier* node_tuple_identifier = new NodeTupleIdentifier();
                 node_tuple_identifier->_identifiers.push_back(node_identifier);
 
                 while (_isTokenType(TokenType::_comma)) {
                     m_tokens_pointer++;
-                    node_tuple_identifier->_identifiers.push_back(parseIdentifier(1));
+                    node_tuple_identifier->_identifiers.push_back(parseIdentifier(true, 0));
                 } 
-                
-                if (node_tuple_identifier->_identifiers.size() >= 2) {
-                    decleration->_identifier = node_tuple_identifier;
-                    printDebug("tuple");
-                } else {
-                    printDebug("Single");
-                }
-            }
 
+                if (node_tuple_identifier->_identifiers.size() >= 2) {
+                    decleration->_identifier = new NodeIdentifier{._identifier = node_tuple_identifier};
+                    printDebug("tuple");
+                }
+            } 
+            else {
+                printDebug("Single");
+                printDebug(m_tokens_pointer->getStrValue());
+            }
+                
             if (_isTokenType(TokenType::_assign)) {
                 printOk("found assign");
 
@@ -1202,13 +1220,13 @@ public:
                     m_tokens_pointer++;
                     node_loop->_expression = parseExpression();
                     if (!_isTokenType(TokenType::_close_paren)) {
-                        printError("Expected `(`", m_tokens_pointer->getLine(), m_tokens_pointer->getChar());
+                        printError("Expected in while `)`", m_tokens_pointer->getLine(), m_tokens_pointer->getChar());
                     } else {
                         m_tokens_pointer++;
                         printDebug("closed expression");
                     }
                 } else {
-                    printError("Expected `(`", m_tokens_pointer->getLine(), m_tokens_pointer->getChar());
+                    printError("Expected in whilw `(`", m_tokens_pointer->getLine(), m_tokens_pointer->getChar());
                 }
             }
 
@@ -1268,11 +1286,10 @@ public:
                 printDebug("found identifier afer `call`");
 
                 node_call->_function_call = new NodeFunctionCall();
-                node_call->_function_call->_identifier = new NodeIdentifier();
-                node_call->_function_call->_identifier->_token = &(*m_tokens_pointer);
-                m_tokens_pointer++;
-
-                node_call->_function_call->_arguments = parseFunctionCallArguments();
+                node_call->_function_call->_identifier = parseIdentifier(true, 0);
+                if (!std::holds_alternative<NodeFunctionCall*>(node_call->_function_call->_identifier->_identifier)) {
+                    printError("doesnt hold NodeFunctionCall");
+                }
 
                 parseSemi();
                 statement->_statement = node_call;
@@ -1349,21 +1366,55 @@ public:
         return node_stream;
     } 
 
-    NodeIdentifier* parseIdentifier(bool raise_error=0) {
+    NodeIdentifier* parseIdentifier(bool raise_error=0, int main = 0) {
         printDebug("parseIdentifier function");
 
         if (_isTokenType(TokenType::_identifier)) {
             printDebug("found identifier");
 
             NodeIdentifier* node_identifier = new NodeIdentifier();
-            node_identifier->_token = &(*m_tokens_pointer);
+            NodeIdentifierToken* node_identifier_token = new NodeIdentifierToken();
+            node_identifier_token->_token = &(*m_tokens_pointer);
+            node_identifier->_identifier = node_identifier_token;
             m_tokens_pointer++;
 
-            if (_isTokenType(TokenType::_period)) {
+            
+            if (main == 0) {
+                while (_isTokenType(TokenType::_open_square) || _isTokenType(TokenType::_open_paren)) {
+                    if (_isTokenType(TokenType::_open_square)) {
+
+                        printDebug("found _open_square");
+                        m_tokens_pointer++;
+                        NodeArrayIndex* node_array_index = new NodeArrayIndex();
+                        node_array_index->_identifier = node_identifier;
+                        node_array_index->_expression = parseExpression(1);
+                        
+                        parseToken(TokenType::_close_square);
+                        node_identifier = new NodeIdentifier {._identifier = node_array_index};
+                    }
+                    
+                    else if (_isTokenType(TokenType::_open_paren)) {
+                        printDebug("found _open_paren");
+
+                        std::vector<NodeFunctionCallArgument*> function_call_arguments = parseFunctionCallArguments();
+                        NodeFunctionCall* function_call = new NodeFunctionCall();
+                        function_call->_arguments = function_call_arguments;
+                        function_call->_identifier = node_identifier;
+                        
+                        node_identifier = new NodeIdentifier {._identifier = function_call};
+                        printDebug("Added function call with arguments: " + std::to_string(function_call_arguments.size()));
+
+                    } 
+                }
+
+            }
+            
+            if (main != -1 && _isTokenType(TokenType::_period)) {
                 m_tokens_pointer++;
-                node_identifier->_access_token = parseIdentifier(1);
+                node_identifier_token->_access_token = parseIdentifier(true, -1);
             }
 
+            printDebug("returning from parseIdentifier");
             return node_identifier;
         }
 
@@ -1387,12 +1438,13 @@ public:
     }
 
     NodeType* parseType(int raise_error=0) {
-        printDebug("parsing type...");
+        printDebug("parsing type..a.");
         if (isType(&*m_tokens_pointer)) {
             NodeType* node_type = new NodeType{._type=&*m_tokens_pointer};
+            m_tokens_pointer++;
 
-            if (_isTokenType(TokenType::_open_square, 1)) {
-                m_tokens_pointer += 2;
+            while (_isTokenType(TokenType::_open_square)) {
+                m_tokens_pointer++;
                 NodeTypeArray* node_type_array = new NodeTypeArray();
                 if (!_isTokenType(TokenType::_asterisk)) {
                     node_type_array->_index = parseInteger(1);
@@ -1408,13 +1460,10 @@ public:
 
                 node_type_array->_type = node_type;
                 
-                NodeType* res_node_type = new NodeType();
-                res_node_type->_type = node_type_array;
-                return res_node_type;
+                node_type = new NodeType{._type = node_type_array};
             }
 
-            else if (_isTokenType(TokenType::_vector)) {
-                m_tokens_pointer++;
+            if (_isTokenType(TokenType::_vector, -1)) {
                 
                 parseToken(TokenType::_less_than);
                 NodeTypeVector* node_type_vector = new NodeTypeVector();
@@ -1424,14 +1473,16 @@ public:
                 return new NodeType{._type = node_type_vector};
             }
 
-            else if (_isTokenType(TokenType::_tuple)) {
-                m_tokens_pointer++;
+            else if (_isTokenType(TokenType::_tuple, -1)) {
+                if (isQualifier(&*(m_tokens_pointer - 1))) {
+                    printError("tuple cant be declared with a qualifier");
+                }
 
+                printOk("found tuple");
                 NodeTypeTuple* node_type_tuple = parseTypeTuple();
                 return new NodeType{._type = node_type_tuple};
             }
 
-            m_tokens_pointer++;
             return node_type;
         
         } else if (raise_error) {
@@ -1457,7 +1508,7 @@ public:
                 printOk("parsed type");
 
                 if (m_tokens_pointer < m_tokens.end() && _isTokenType(TokenType::_identifier)) {
-                    node_argument->_identifier = parseIdentifier();
+                    node_argument->_identifier = parseIdentifier(false, -1);
 
                 } else {
                     printError("Expected identifier", m_tokens_pointer->getLine(), m_tokens_pointer->getChar());
@@ -1478,7 +1529,7 @@ public:
     std::vector<NodeFunctionDeclerationArgument*> parseFunctionDeclerationArguments(bool* is_procedure) {
         std::vector<NodeFunctionDeclerationArgument*> node_arguments;
         if (m_tokens_pointer->getTokenType() != TokenType::_open_paren) {
-            printError("Expected `(`", m_tokens_pointer->getLine(), m_tokens_pointer->getChar());
+            printError("Expected parseFunctionDeclerationArguments `(`", m_tokens_pointer->getLine(), m_tokens_pointer->getChar());
         }
         m_tokens_pointer++;
         printDebug("found `(`");
@@ -1531,7 +1582,7 @@ public:
     std::vector<NodeFunctionCallArgument*> parseFunctionCallArguments() {
         std::vector<NodeFunctionCallArgument*> call_arguments;
         if (m_tokens_pointer->getTokenType() != TokenType::_open_paren) {
-            printError("Expected `(`", m_tokens_pointer->getLine(), m_tokens_pointer->getChar());
+            printError("Expected parseFunctionCallArguments `(`", m_tokens_pointer->getLine(), m_tokens_pointer->getChar());
         }
 
         m_tokens_pointer++;
@@ -1590,7 +1641,7 @@ public:
             m_tokens_pointer++;
 
             printDebug("parsing identifier");
-            node_function->_identifier = parseIdentifier(1);
+            node_function->_identifier = parseIdentifier(true, -1);
             if (node_function->_identifier) {
                 printDebug("parsed identifier");
 
@@ -1657,17 +1708,7 @@ public:
 
             node_program_element->_element = function_decleration;
         }        
-        
-        else if (_isTokenType(TokenType::_typealias)) {
-            parseToken(TokenType::_typealias);
-            NodeTypealias* node_typealias = new NodeTypealias();
-            node_typealias->_original = parseType(1);
-            node_typealias->_new = parseToken(TokenType::_identifier);
-            m_types.push_back(node_typealias->_new->getStrValue());
-            parseSemi();
-            node_program_element->_element = node_typealias;
-        }
-        
+                
         else {
             printDebug("parsing statement in parseElement...");
             NodeStatement* statement = parseStatement();
@@ -1682,6 +1723,18 @@ public:
         printDebug("parsing program...");
         
         while (m_tokens_pointer < m_tokens.end()) {
+            while (_isTokenType(TokenType::_typealias)) {
+                parseToken(TokenType::_typealias);
+                NodeTypealias* node_typealias = new NodeTypealias();
+                node_typealias->_original = parseType(1);
+                node_typealias->_new = parseToken(TokenType::_identifier);
+                m_types.push_back(node_typealias->_new->getStrValue());
+                parseSemi();
+
+                NodeProgramElement* node_program_element = new NodeProgramElement{._element=node_typealias};
+                m_program->_elements.push_back(node_program_element);
+            }
+
             if (NodeProgramElement* node_program_element = parseElement()) {
                 m_program->_elements.push_back(node_program_element);
             } else {
