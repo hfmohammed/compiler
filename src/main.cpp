@@ -8,6 +8,12 @@
 #include "./parser.hpp"
 #include "./generator.hpp"
 
+void printDebug(std::string msg) {
+    #if DEBUG
+        std::cout << std::string(CYAN) + "[debug] " + msg + "\033[0m" << std::endl;
+    #endif
+}
+
 int main(int argc, char* argv[]) {
     if (argc != 2) {
         std::cerr << "Incorrect number of parameters" << std::endl;
@@ -32,6 +38,7 @@ int main(int argc, char* argv[]) {
     Parser parser(tokens);
     NodeProgram* program = parser.parse();
 
+    printDebug("cp3");
     Generator generator(program);
     generator.generate();
 

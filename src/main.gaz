@@ -1,0 +1,132 @@
+typealias integer dasaaa;
+
+const integer x = 5;
+var string name = "Hassan";
+const boolean flag = true;
+
+const integer a = 10 + 5 * 2;
+var integer b = -(a - 3);
+var boolean c = not false or true;
+
+struct Point(integer x, integer y);
+var Point p = Point(2, 3);
+var integer z = p.x + p.y;
+
+function add(integer a, integer b) returns integer = a + b;
+
+procedure greet(var string msg)
+{
+    call print(msg);
+}
+
+loop while (a < 10)
+{
+    a = a + 1;
+}
+loop
+{
+    call print(a);
+} while a < 20;
+
+if (x < 5)
+{
+    call print("small");
+}
+else if (x < 10)
+{
+    call print("medium");
+}
+else
+{
+    call print("large");
+}
+
+function test() returns integer
+{
+    var integer i = 0;
+    loop while (i < 5)
+    {
+        if (i == 3)
+        {
+            break;
+        }
+        i = i + 1;
+    }
+    return i;
+}
+
+var integer x = 10;
+x -> std_output;
+
+var integer y;
+y <- std_input;
+
+function square(integer n) returns integer = n * n;
+var integer result = square(5);
+var integer total = add(square(2), square(3));
+
+struct Person(string name, integer age);
+
+function greet(Person p) returns string
+{
+    return "Hello, " + p.name;
+}
+
+procedure main()
+{
+    var Person me = Person("Hassan", 21);
+    var string msg = greet(me);
+    msg -> std_output;
+}
+
+
+// should fail
+// var integer x = 10
+// function foo(integer x) = x + 1;
+// const integer x = 5 + ;
+// call a[1]()[2];
+
+a, b = (2, 3);
+tuple(integer, string, boolean[10]) a, b = (1.0, 2.0);
+
+var k = 2 + a[1]()[2]();
+call a[1]()[2]();
+
+integer[*][*] A;
+var k = a[2][2].x;
+
+x = y;
+a, b = (3.14, 1.5);
+
+a = b.c.d.e;
+
+function f() returns tuple(integer, boolean) {}
+a, b, c, d, e = tuple_expression;
+tuple(integer, string) a = (a, b, c);
+
+var integer[10] a = 1..10;
+var integer[10] a = 1 in 10;
+integer[10] v = [i in 1..10 | i * i];
+/* v[i] == i * i */
+
+integer[2][3] M = [i in 1..2, j in 1..3 | i * j];
+/* M[i][j] == i * j */
+
+var a = (2, 3) in [(2, 3), (3, 4)];
+vector<tuple(real, integer)> a = A(i, j);
+vector<tuple(real, integer)> a = A((i, j));
+
+var x = 1;
+const y = (1, 2);
+
+
+var dasaaa a = 1;
+integer[*][*] A;
+integer[10][20] B = A[i][j];
+
+function to_real_vec(integer[*] x) returns real[*] {
+   real[*] rvec = x;
+   return rvec;
+}
+
+var k = a[2][2]();
