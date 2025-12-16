@@ -195,9 +195,9 @@ struct NodeProgram {
 };
 
 struct NodeControl {
-    Token* _token;
-    NodeExpression* _expression;
-    NodeStatement* _statement;
+    std::pair<NodeExpression*, NodeStatement*> _if;
+    std::vector<std::pair<NodeExpression*, NodeStatement*>> _else_if;
+    NodeStatement* _statement_else;
 };
 
 struct NodeReturn {
@@ -630,21 +630,19 @@ private:
 
         } else if (std::holds_alternative<NodeControl*>(statement->_statement)) {
             NodeControl* node_control = std::get<NodeControl*>(statement->_statement);
-            if (node_control->_token->getTokenType() == TokenType::_if) {
-                printDebug(output_prefix + "[if]");
-            
-            } else if (node_control->_token->getTokenType() == TokenType::_else_if) {
-                printDebug(output_prefix + "[else if]");
+            printDebug(output_prefix + "[if]");
+            printExpression(node_control->_if.first, indent);
+            printStatement(node_control->_if.second, indent + 1);
 
-            } else if (node_control->_token->getTokenType() == TokenType::_else) {
-                printDebug(output_prefix + "[else]");
+            for (auto else_if : node_control->_else_if) {
+                printDebug(output_prefix + "[elif]");
+                printExpression(else_if.first, indent);
+                printStatement(else_if.second, indent + 1);
             }
             
-            if (node_control->_token->getTokenType() == TokenType::_if || node_control->_token->getTokenType() == TokenType::_else_if) {
-                printExpression(node_control->_expression, indent);
+            if (node_control->_statement_else) {
+                printStatement(node_control->_statement_else, indent + 1);
             }
-
-            printStatement(node_control->_statement, indent + 1);
 
         } else if (std::holds_alternative<NodeStatementToken*>(statement->_statement)) {
             NodeStatementToken* node_statement_token = std::get<NodeStatementToken*>(statement->_statement);
@@ -1277,51 +1275,56 @@ private:
     NodeStatement* parseStatement() {
         NodeStatement* statement = new NodeStatement();
 
-        if (_isTokenType(TokenType::_else) || _isTokenType(TokenType::_if)) {
+        if (_isTokenType(TokenType::_if)) {
 
-            printDebug(std::string("parsing ") + (_isTokenType(TokenType::_if) ? "if" : "else if") + std::string(" statement"));
+            printDebug("parsing if block");
             
             NodeControl* node_control = new NodeControl();
-            if (_isTokenType(TokenType::_if) || (_isTokenType(TokenType::_else) && !_isTokenType(TokenType::_if, 1))) {
-                node_control->_token = &(*m_tokens_pointer);
-                m_tokens_pointer++;
-
-            } else {
-                node_control->_token = new Token(TokenType::_else_if, "`else if`", m_tokens_pointer->getLine(), m_tokens_pointer->getChar());
-                m_tokens_pointer += 2;
-            }
-
-            if (node_control->_token->getTokenType() == TokenType::_else_if || node_control->_token->getTokenType() == TokenType::_if) {
-                if (_isTokenType(TokenType::_open_paren)) {
-                    m_tokens_pointer++;
-
-                    NodeExpression* node_expression = parseExpression();
-                    if (node_expression == nullptr) {
-                        printError("Expected expression for conditional statements");
-                    }
-
-                    if (_isTokenType(TokenType::_close_paren)) {
-                        m_tokens_pointer++;
-                    } else {
-                        printError("Expected `)` after conditional statements");
-                    }
-
-                    node_control->_expression = node_expression;
-                    printOk("found expression");
-                } else {
-                    printError("Expected `(` after conditional statements");
+            m_tokens_pointer++; // consume if
+            bool if_block = true;
+            do {
+                if (_isTokenType(TokenType::_else) && _isTokenType(TokenType::_if, 1)) {
+                    m_tokens_pointer += 2;
                 }
 
+                printDebug("looping through ifs");
+                parseToken(TokenType::_open_paren);
+
+                NodeExpression* node_expression = parseExpression();
+                if (!node_expression) {
+                    printError("Expected expression for conditional statements");
+                }
+                printExpression(node_expression, 1);
+
+                parseToken(TokenType::_close_paren);
+
+                NodeStatement* node_statement = parseStatement();
+                if (!node_statement) {
+                    printError("Expected body for if statement");
+                }
+                printOk("found statement");
+
+                if (if_block) {
+                    node_control->_if = { node_expression, node_statement };
+                    printOk("found if");
+                    if_block = false;
+                } else {
+                    node_control->_else_if.push_back({ node_expression, node_statement });
+                    printOk("found elseif");
+                }
+
+            } while (m_tokens_pointer->getTokenType() == TokenType::_else && (m_tokens_pointer + 1)->getTokenType() == TokenType::_if);
+
+            if (_isTokenType(TokenType::_else)) {
+                m_tokens_pointer++;
+                node_control->_statement_else = parseStatement();
             }
             
-
-            NodeStatement* node_statement = parseStatement();
-            if (node_statement == NULL) {
-                printError("Expected body for if statement");
-            }
-            node_control->_statement = node_statement;
-            printOk("found statement");
             statement->_statement = node_control;
+            printOk("parsed control statement");
+            
+        } else if (_isTokenType(TokenType::_else)) {
+            printError("expected if block but got `else`", m_tokens_pointer->getLine(), m_tokens_pointer->getChar());
         }
 
         else if (_isTokenType(TokenType::_loop)) {
@@ -1345,7 +1348,7 @@ private:
                         printDebug("closed expression");
                     }
                 } else {
-                    printError("Expected in whilw `(`", m_tokens_pointer->getLine(), m_tokens_pointer->getChar());
+                    printError("Expected in while `(`", m_tokens_pointer->getLine(), m_tokens_pointer->getChar());
                 }
             }
 
@@ -1912,7 +1915,7 @@ private:
         printDebug(std::to_string(m_tokens.size()));
         // printTokens();
         parseProgram();
-        // printProgram(m_program);
+        printProgram(m_program);
         return m_program;
     }
 };

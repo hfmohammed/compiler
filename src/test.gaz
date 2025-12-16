@@ -1,6 +1,13 @@
-const int x = 2;
-{
-    x = x + 2;
-    return y;
+var int x = 1;
+loop {
+    if (x == -21) break;
+
+    loop {
+        x = x - 1;
+        continue;
+        x = -100;
+    } while (x >= -10);
+
+    x = x - 10;
 }
-return x;
+return 256 - x;

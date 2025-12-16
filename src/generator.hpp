@@ -5,6 +5,10 @@
 
 #define DEBUG 1
 
+struct LoopContext {
+    int loop_id;
+};
+
 class Generator
 {
 private:
@@ -18,6 +22,8 @@ private:
     int m_frame_size = 0;
     bool m_count_only = false;
     int m_current_scope = -1;
+    int m_label_count = 0;
+    std::vector<LoopContext> m_loop_stack;
 
 public:
     Generator(NodeProgram *program)
@@ -90,14 +96,12 @@ public:
         }
     }
 
-    void push_var(std::string _register, int indent = 0)
+    void store_var(std::string _register, int offset, int indent = 0)
     {
-        m_local_size += 8;
         if (m_count_only)
             return;
 
-        emit("");
-        emit("str " + _register + ", [x29, #" + std::to_string(-m_local_size) + "]", "store x0 at fp + " + std::to_string(-m_local_size) + " into " + _register, indent);
+        emit("str " + _register + ", [x29, #" + std::to_string(-offset) + "]", "store x0 at fp + " + std::to_string(-offset) + " into " + _register, indent);
     }
 
     void push_temp(std::string _register, int indent = 0)
@@ -220,6 +224,36 @@ public:
 
             switch (node_operator->_token->getTokenType())
             {
+            case TokenType::_greater_than_equal:
+                emit("cmp x1, x0", "compare if x0 is 0 and set a flag", indent);
+                emit("cset x0, ge", "set x0 to the result", indent);
+                // printError("found >=");
+                break;
+
+            case TokenType::_greater_than:
+                emit("cmp x1, x0", "compare if x0 is 0 and set a flag", indent);
+                emit("cset x0, gt", "set x0 to the result", indent);
+                // printError("found >");
+                break;
+
+            case TokenType::_less_than_equal:
+                emit("cmp x1, x0", "compare if x0 is 0 and set a flag", indent);
+                emit("cset x0, le", "set x0 to the result", indent);
+                // printError("found <=");
+                break;
+
+            case TokenType::_less_than:
+                emit("cmp x1, x0", "compare if x0 is 0 and set a flag", indent);
+                emit("cset x0, lt", "set x0 to the result", indent);
+                // printError("found <");
+                break;
+
+            case TokenType::_check_equal:
+                emit("cmp x0, x1", "compare if x0 is 0 and set a flag", indent);
+                emit("cset x0, eq", "set x0 to the result", indent);
+                // printError("found ==");
+                break;
+
             case TokenType::_asterisk:
                 emit("mul x0, x1, x0", "x0 = x1 * x0", indent);
                 break;
@@ -387,17 +421,37 @@ public:
             NodeIdentifierToken *node_identifier_token = std::get<NodeIdentifierToken *>(node_identifier->_identifier);
             std::string identifier_name = node_identifier_token->_token->getStrValue();
             printDebug(std::to_string(m_scopes.size()));
+            int offset;
 
+            // redecleration check
             if (m_scopes.size() > m_current_scope && m_scopes[m_current_scope].contains(identifier_name))
             {
                 printError("redecleration of variable not allowed: " + identifier_name);
             }
             else
             {
-                printDebug(std::to_string(m_current_scope));
-
-                m_scopes[m_current_scope][node_identifier_token->_token->getStrValue()] = m_local_size;
+                printDebug("cs1::" + std::to_string(m_current_scope) + "::" + std::to_string(m_local_size));
+                m_local_size += 8;
+                
+                printDebug("cs1::" + std::to_string(m_current_scope) + "::" + std::to_string(m_local_size));
+                m_scopes[m_current_scope][identifier_name] = m_local_size;
                 printDebug(node_identifier_token->_token->getStrValue() + "::" + std::to_string(m_local_size));
+            }
+            
+            if (decleration->_expression != NULL)
+            {
+                printDebug("generating expression");
+                generateExpression(decleration->_expression, indent);
+                emit("// expression generated");
+                if (!m_count_only) {
+                    offset = lookup(identifier_name);
+                    printDebug("a::" + std::to_string(offset));
+                    store_var("x0", offset, indent);
+                }
+            }
+            else
+            {
+                printDebug("[No expression]");
             }
         }
         else
@@ -405,26 +459,10 @@ public:
             printError("Invalid identifier");
         }
 
-        if (decleration->_expression != NULL)
-        {
-            printDebug("generating expression");
-            generateExpression(decleration->_expression, indent);
-            push_var("x0", indent);
-            if (!m_count_only)
-            {
-                if (std::holds_alternative<NodeIdentifierToken *>(decleration->_identifier->_identifier))
-                {
-                    NodeIdentifierToken *node_identifier_token = std::get<NodeIdentifierToken *>(decleration->_identifier->_identifier);
-                    m_scopes[m_current_scope][node_identifier_token->_token->getStrValue()] = m_local_size;
+    }
 
-                    printDebug(node_identifier_token->_token->getStrValue() + "::" + std::to_string(m_local_size));
-                }
-            }
-        }
-        else
-        {
-            printDebug("[No expression]");
-        }
+    int genLabel() {
+        return m_label_count++;
     }
 
     void generateStatement(NodeStatement *statement, int indent)
@@ -435,6 +473,7 @@ public:
             printDebug("Generating NodeDecleration");
             generateDecleration(std::get<NodeDecleration *>(statement->_statement), indent);
         }
+
         else if (std::holds_alternative<NodeBlock *>(statement->_statement))
         {
             printDebug("Generating NodeBlock");
@@ -446,17 +485,83 @@ public:
                 generateElement(element, indent + 1);
             }
             pop_scope();
-
         }
+
         else if (std::holds_alternative<NodeControl *>(statement->_statement))
         {
             printDebug("Generating NodeControl");
-            // todo
+            NodeControl *node_control = std::get<NodeControl *>(statement->_statement);
+            int id = genLabel();
+
+            auto L = [&](const std::string& name) {
+                return ".L" + name + "_" + std::to_string(id);
+            };
+
+            // generate if
+            generateExpression(node_control->_if.first, indent);
+            emit("");
+            emit("cmp x0, #0", "compare if x0 is 0 and set a flag", indent);
+            emit("b.eq " + L("next"), "branch to else if res is 0", indent);
+
+
+            generateStatement(node_control->_if.second, indent);
+            emit("");
+            emit("b " + L("end"), "branch to else after completing if", indent);
+            emit(L("next") + ":", "", indent);
+
+            // generate else if
+            int else_if_count = 0;
+            for (int i = 0; i < node_control->_else_if.size(); i++) {
+                auto elif = node_control->_else_if[i];
+
+                generateExpression(elif.first, indent);
+                emit("");
+                emit("cmp x0, #0", "compare if x0 is 0 and set a flag", indent);
+                emit("b.eq .Lelifnext_" + std::to_string(id) + "_" + std::to_string(i), "branch to else if res is 0", indent);
+
+                generateStatement(elif.second, indent);
+                emit("");
+                emit("b " + L("end"), "branch to else after completing else if", indent);
+                emit(".Lelifnext_" + std::to_string(id) + "_" + std::to_string(i) + ":", "", indent);
+            }
+            
+            // generate else
+            if (node_control->_statement_else) {
+                emit("");
+                generateStatement(node_control->_statement_else, indent);
+                emit("");
+            }
+
+            emit(L("end") + ":", "", indent);
+            emit("// incremented branch count");
         }
         else if (std::holds_alternative<NodeStatementToken *>(statement->_statement))
         {
             printDebug("Generating NodeStatementToken");
-            // todo
+            NodeStatementToken *node_statment_token = std::get<NodeStatementToken*>(statement->_statement);
+
+            switch (node_statment_token->_token->getTokenType()) {
+                
+                case TokenType::_break:
+                    if (!m_loop_stack.size()) {
+                        printError("`break` can only be used inside the body of a loop");
+                    }
+
+                    emit("b EndLoop_" + std::to_string(m_loop_stack.back().loop_id), "", indent);
+                    break;
+
+                case TokenType::_continue:
+                    if (!m_loop_stack.size()) {
+                        printError("`continue` can only be used inside the body of a loop");
+                    }
+
+                    emit("b LoopCondition_" + std::to_string(m_loop_stack.back().loop_id), "", indent);
+                    break;
+
+                default:
+                    printError("Invalid token statement:" + node_statment_token->_token->getStrValue());
+                    break;
+            }
         }
         else if (std::holds_alternative<NodeStream *>(statement->_statement))
         {
@@ -466,8 +571,55 @@ public:
         else if (std::holds_alternative<NodeLoop *>(statement->_statement))
         {
             printDebug("Generating NodeLoop");
-            // todo
+            NodeLoop* node_loop = std::get<NodeLoop *>(statement->_statement);
+            int loop_id = 0;
+            if (!m_count_only) loop_id = genLabel();
+
+            emit("BeginLoop_" + std::to_string(loop_id) + ":", "", 1);
+            m_loop_stack.push_back({ loop_id });
+
+            if (*node_loop->_predicated) {
+                printDebug("predicated");
+                if (!m_count_only)
+                    emit("LoopCondition_" + std::to_string(loop_id) + ":", "", indent);
+    
+                generateExpression(node_loop->_expression, indent);
+                emit("cmp x0, #0", "", indent);
+                
+                if (!m_count_only)
+                    emit("b.eq EndLoop_" + std::to_string(loop_id), "", indent);
+
+                generateStatement(node_loop->_statement, indent);
+
+                if (!m_count_only)
+                    emit("b BeginLoop_" + std::to_string(loop_id), "", indent);
+                
+            } else if (node_loop->_expression) {
+                printDebug("postpredicated");
+                generateStatement(node_loop->_statement, indent);
+                
+                if (!m_count_only)
+                    emit("LoopCondition_" + std::to_string(loop_id) + ":", "", indent);
+    
+                generateExpression(node_loop->_expression, indent);
+                emit("cmp x0, #0", "", indent);
+    
+                if (!m_count_only)
+                    emit("b.ne BeginLoop_" + std::to_string(loop_id), "", indent);
+
+
+            } else {
+                printDebug("infinite");
+                generateStatement(node_loop->_statement, indent);
+
+                if (!m_count_only)
+                    emit("b BeginLoop_" + std::to_string(loop_id), "", indent);
+            }
+
+            emit("EndLoop_" + std::to_string(loop_id) + ":", "", 1);
+            m_loop_stack.pop_back();
         }
+
         else if (std::holds_alternative<NodeReturn *>(statement->_statement))
         {
             printDebug("Generating NodeReturn");
@@ -496,7 +648,7 @@ public:
 
                 NodeIdentifierToken *lhs_identifier_token = std::get<NodeIdentifierToken *>(lhs_identifier->_identifier);
 
-                emit("str x0, [x29, #" + std::to_string(-m_scopes[m_current_scope][lhs_identifier_token->_token->getStrValue()]) + "]", "store the new value", indent);
+                emit("str x0, [x29, #" + std::to_string(-lookup(lhs_identifier_token->_token->getStrValue())) + "]", "store the new value", indent);
             }
         }
         else
@@ -569,7 +721,6 @@ public:
 
         printDebug("cp4");
         emit(".global _main");
-
         printDebug("scope_size::" + std::to_string(m_current_scope));
         push_scope();
         printDebug("scope_size::" + std::to_string(m_current_scope));
