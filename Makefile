@@ -19,5 +19,11 @@ run: compile link
 
 comp_link: compile link
 
+run_asm:
+	@echo "Running assembled binary..."
+	@clang output.s -o output
+	@./output; echo "Exit status: $$?"
+	@$(MAKE) clean
+
 clean:
 	@rm output
