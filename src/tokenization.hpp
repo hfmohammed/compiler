@@ -131,6 +131,11 @@ public:
         return m_type;
     }
 
+    void setTokenType(TokenType new_type) {
+        m_type = new_type;
+    }
+
+
     std::string getStrValue() {
         return m_str_value;
     }
@@ -297,6 +302,7 @@ public:
         }
 
         else if (content == "not") {
+            printDebug("found not");
             return Token(TokenType::_not, "`not`", line, _char);
         }
 
@@ -439,8 +445,9 @@ public:
 
         else if (content == "+") {
             if (m_tokens.size() == 0 || isOperator(m_tokens.back()) || 
-                m_tokens.back().getTokenType() == TokenType::_open_curly || m_tokens.back().getTokenType() == TokenType::_assign || m_tokens.back().getTokenType() == TokenType::_open_paren || m_tokens.back().getTokenType() == TokenType::_open_square 
+                m_tokens.back().getTokenType() == TokenType::_open_curly || m_tokens.back().getTokenType() == TokenType::_assign || m_tokens.back().getTokenType() == TokenType::_open_paren || m_tokens.back().getTokenType() == TokenType::_open_square || m_tokens.back().getTokenType() == TokenType::_return
             ) {
+                printDebug("Found _unary_plus");
                 return Token(TokenType::_unary_plus, "`+`", line, _char);
             }
             return Token(TokenType::_binary_plus, "`+`", line, _char);
@@ -448,8 +455,11 @@ public:
 
         else if (content == "-") {
             if (m_tokens.size() == 0 || isOperator(m_tokens.back()) || 
-                m_tokens.back().getTokenType() == TokenType::_open_curly || m_tokens.back().getTokenType() == TokenType::_assign || m_tokens.back().getTokenType() == TokenType::_open_paren || m_tokens.back().getTokenType() == TokenType::_open_square 
-            ) return Token(TokenType::_unary_minus, "`-`", line, _char);
+                m_tokens.back().getTokenType() == TokenType::_open_curly || m_tokens.back().getTokenType() == TokenType::_assign || m_tokens.back().getTokenType() == TokenType::_open_paren || m_tokens.back().getTokenType() == TokenType::_open_square || m_tokens.back().getTokenType() == TokenType::_return
+            ) {
+                printDebug("Found _unary_minus");
+                return Token(TokenType::_unary_minus, "`-`", line, _char);
+            }
 
             return Token(TokenType::_binary_minus, "`-`", line, _char);
         }

@@ -396,7 +396,7 @@ private:
 
             NodeIdentifier* node_identifier = decleration->_identifier;
             printIdentifier(node_identifier, indent);
-        
+
         } else {
             printError("Invalid identifier");
         }
@@ -918,6 +918,8 @@ private:
     NodeExpression* parseExpression(int min_precedence = 0, int is_tuple_assignment = 0) {
         printDebug("parsing expression with precedence: " + std::to_string(min_precedence));
         printDebug("Token type: " + std::to_string(_isTokenType(TokenType::_number) ? 1 : 0));
+        printDebug("Token type: " + std::to_string(_isTokenType(TokenType::_unary_minus) ? 1 : 0));
+        printDebug("Token type: " + std::to_string(_isTokenType(TokenType::_binary_minus) ? 1 : 0));
         NodeExpression* lhs = new NodeExpression();
         
         if (_isTokenType(TokenType::_open_paren) || _isTokenType(TokenType::_identifier)) {
@@ -1914,3 +1916,4 @@ private:
         return m_program;
     }
 };
+

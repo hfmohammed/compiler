@@ -13,10 +13,11 @@ link: src/main.o src/test.gaz
 
 run: compile link
 	@echo "Running assembled binary..."
-	@bash -c './test; echo "Exit status: $$?"'
+	@clang output.s -o output
+	@./output; echo "Exit status: $$?"
 	@$(MAKE) clean
 
 comp_link: compile link
 
 clean:
-	rm test test.o src/main.o
+	@rm output
