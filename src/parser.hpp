@@ -14,6 +14,7 @@ struct NodeStatement;
 struct NodeType;
 struct NodeIdentifierToken;
 struct NodeIdentifier;
+struct NodeCall;
 
 struct NodeOperator {
     Token* _token;
@@ -123,7 +124,7 @@ struct NodeAssign {
 };
 
 struct NodeExpression {
-    std::variant<NodeExpressionBinary*, NodeInteger*, NodeString*, NodeBoolean*, NodeExpressionUnary*, NodeCharacter*, NodeGenerator*, NodeFunctionCall*, NodeTuple*, NodeIdentifier*, NodeList*, NodeStatement*, NodeAssign*, NodeRange*> _expression;
+    std::variant<NodeExpressionBinary*, NodeInteger*, NodeString*, NodeBoolean*, NodeExpressionUnary*, NodeCharacter*, NodeGenerator*, NodeFunctionCall*, NodeTuple*, NodeIdentifier*, NodeList*, NodeStatement*, NodeAssign*, NodeRange*, NodeCall*> _expression;
 };
 
 struct NodeFunctionDeclerationArgument {

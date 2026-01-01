@@ -1,13 +1,15 @@
-var int x = 1;
-loop {
-    if (x == -21) break;
-
-    loop {
-        x = x - 1;
-        continue;
-        x = -100;
-    } while (x >= -10);
-
-    x = x - 10;
+function g () returns integer {
+  if (0) {
+    return 3;
+  }
+  else {
+    return 8;
+  }
 }
-return 256 - x;
+
+function main() returns integer {
+    var integer x = g();
+    return x;
+}
+
+return main();
