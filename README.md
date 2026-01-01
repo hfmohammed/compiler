@@ -76,7 +76,6 @@ Procedures do not return a value. They may omit a return statement. If no return
 ## Control Flow
 
 Supported control flow constructs include:
-
 * if, else if, else
 * while loops
 * post predicated loops
@@ -100,26 +99,25 @@ The Makefile performs the following steps:
 ### Makefile Targets
 
 * `make` or `make run` Builds the compiler, runs it on the test input, assembles the output, and executes the program
-
 * `make compile` Compiles the compiler source into an executable
-
 * `make link` Runs the compiler on the test Gazprea file to produce `output.s`
-
 * `make run_asm` Assembles and runs an existing `output.s` file without recompiling the compiler
-
 * `make clean` Removes generated binaries
 
 The Makefile is intended for rapid iteration and debugging during compiler development.
 
 ## Files
-
-* `doc/grammar.md` defines grammar
 * `src/tokenization.hpp` Token definitions and lexical utilities
 * `src/parser.hpp` AST definitions and parsing logic
 * `src/generator.hpp` ARM64 code generation backend
 * `src/main.cpp` Compiler entry point
 * `src/example.gaz` Example and test file
 * `Makefile` Build and execution automation
+* `grammar.md` defines grammar
+
+## Documentation
+* 📘 [Language Grammar](grammar.md)
+* 🧠 Parser & AST Design (coming soon)
 
 ## Limitations and Future Work
 
