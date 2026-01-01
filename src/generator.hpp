@@ -24,6 +24,8 @@ private:
     int m_current_scope = -1;
     int m_label_count = 0;
     std::vector<LoopContext> m_loop_stack;
+    std::unordered_map<std::string, std::pair<int, int>> m_func_decl_stack;
+    int m_has_explicit_return = false;
 
 public:
     Generator(NodeProgram *program)
@@ -155,6 +157,8 @@ public:
 
     void generateExpression(NodeExpression *expression, int indent)
     {
+        printDebug("expr variant index = " + std::to_string(expression->_expression.index()));
+
         if (!expression)
         {
             printDebug("null expression encountered in generateExpression");
@@ -311,6 +315,28 @@ public:
             }
         }
 
+        else if (std::holds_alternative<NodeFunctionCall*>(expression->_expression)) {
+            NodeFunctionCall* fc = std::get<NodeFunctionCall*>(expression->_expression);
+            if (!fc) printError("null NodeFunctionCall");
+
+            std::string fn_name = baseIdentName(fc->_identifier);
+
+            int argc = (int)fc->_arguments.size();
+            if (argc > 8) printError("More than 8 function arguments not supported");
+
+            for (int i = 0; i < argc; i++) {
+                generateExpression(fc->_arguments[i]->_expression, indent);
+                push_temp("x0", indent);
+            }
+            for (int i = argc - 1; i >= 0; i--) {
+                pop_temp("x" + std::to_string(i), indent);
+            }
+
+            emit("bl " + fn_name, "call " + fn_name, indent);
+            return;
+        }
+
+
         // generate assign expression
         else if (std::holds_alternative<NodeAssign *>(expression->_expression))
         {
@@ -322,16 +348,50 @@ public:
         // generate identifier
         else if (std::holds_alternative<NodeIdentifier *>(expression->_expression))
         {
-            NodeIdentifier *node_identifier = std::get<NodeIdentifier *>(expression->_expression);
+            NodeIdentifier *id = std::get<NodeIdentifier *>(expression->_expression);
+            if (!id) printError("null NodeIdentifier in identifier expression");
 
-            NodeIdentifierToken *node_identifier_token = std::get<NodeIdentifierToken *>(node_identifier->_identifier);
-            printDebug("stack size::" + std::to_string(m_local_size));
+            if (id->_access_token) {
+                printError("member access identifier not supported yet in expression");
+            }
 
-            std::string identifier_name = node_identifier_token->_token->getStrValue();
-            int offset = lookup(identifier_name);
-            peak("x0", offset, indent);
+            printDebug("NodeIdentifier::_identifier index = " + std::to_string(id->_identifier.index()));
 
-            printDebug("offset from top::" + std::to_string(offset));
+            std::visit([&](auto* inner) {
+                using T = std::decay_t<decltype(inner)>;
+
+                if constexpr (std::is_same_v<T, NodeIdentifierToken*>) {
+                    if (!inner) printError("null NodeIdentifierToken* in identifier expression");
+                    std::string name = inner->_token->getStrValue();
+                    int offset = lookup(name);
+                    peak("x0", offset, indent);
+                    return;
+                }
+                else if constexpr (std::is_same_v<T, NodeFunctionCall*>) {
+                    NodeFunctionCall* fc = inner;
+                    if (!fc) printError("null NodeFunctionCall* in identifier expression");
+
+                    std::string fn_name = baseIdentName(fc->_identifier);
+
+                    int argc = (int)fc->_arguments.size();
+                    if (argc > 8) printError("More than 8 function arguments not supported");
+
+                    for (int i = 0; i < argc; i++) {
+                        generateExpression(fc->_arguments[i]->_expression, indent);
+                        push_temp("x0", indent);
+                    }
+                    for (int i = argc - 1; i >= 0; i--) {
+                        pop_temp("x" + std::to_string(i), indent);
+                    }
+
+                    emit("bl " + fn_name, "call " + fn_name, indent);
+                    return;
+                }
+                else {
+                    printError(std::string("unsupported identifier form in expression (alt typeid=")
+                            + typeid(T).name() + ")");
+                }
+            }, id->_identifier);
 
             return;
         }
@@ -418,7 +478,8 @@ public:
 
             printDebug("generating identifier");
             NodeIdentifier *node_identifier = decleration->_identifier;
-            NodeIdentifierToken *node_identifier_token = std::get<NodeIdentifierToken *>(node_identifier->_identifier);
+            NodeIdentifierToken* node_identifier_token = requireIdentToken(node_identifier, "declaration identifier");
+
             std::string identifier_name = node_identifier_token->_token->getStrValue();
             printDebug(std::to_string(m_scopes.size()));
             int offset;
@@ -463,6 +524,22 @@ public:
 
     int genLabel() {
         return m_label_count++;
+    }
+
+    NodeIdentifierToken* requireIdentToken(NodeIdentifier* id, const std::string& ctx) {
+        if (!id) printError("null identifier in " + ctx);
+
+        if (auto p = std::get_if<NodeIdentifierToken*>(&id->_identifier)) {
+            if (!*p) printError("null NodeIdentifierToken* in " + ctx);
+            return *p;
+        }
+
+        printError("expected simple identifier token in " + ctx);
+        return nullptr;
+    }
+
+    std::string baseIdentName(NodeIdentifier* id) {
+        return requireIdentToken(id, "baseIdentName")-> _token->getStrValue();
     }
 
     void generateStatement(NodeStatement *statement, int indent)
@@ -630,12 +707,29 @@ public:
             emit("mov sp, x29", "restore sp from fp", indent);
             emit("ldp x29, x30, [sp], 16", "restore x29 and x30 from sp", indent);
             emit("ret", "end of function", indent);
+            
+            m_has_explicit_return = true;
         }
-        else if (std::holds_alternative<NodeCall *>(statement->_statement))
-        {
-            printDebug("Generating NodeCall");
-            // todo
+
+        else if (std::holds_alternative<NodeCall*>(statement->_statement)) {
+            NodeCall* c = std::get<NodeCall*>(statement->_statement);
+
+            // c->_function_call->_identifier holds NodeFunctionCall*
+            NodeFunctionCall* fc = c->_function_call;
+
+            std::string fn_name = baseIdentName(fc->_identifier);
+
+            int argc = (int)fc->_arguments.size();
+            if (argc > 8) printError("More than 8 function arguments not supported");
+
+            for (int i = 0; i < argc; i++) {
+                generateExpression(fc->_arguments[i]->_expression, indent);
+                emit("mov x" + std::to_string(i) + ", x0", "arg " + std::to_string(i), indent);
+            }
+
+            emit("bl " + fn_name, "call " + fn_name, indent);
         }
+
         else if (std::holds_alternative<NodeAssign *>(statement->_statement))
         {
             printDebug("Generating NodeAssign");
@@ -658,6 +752,117 @@ public:
         }
     }
 
+    enum class FuncMode {
+        None,
+        Function,
+        Procedure
+    };
+
+    FuncMode m_mode = FuncMode::None;
+
+    void bindAndStoreParams(NodeFunctionDecleration* fn, int indent) {
+        // Gazprea: function args implicitly const; procedures allow qualifiers
+        const int MAX_REG_ARGS = 8;
+        int n = (int)fn->_arguments.size();
+        if (n > MAX_REG_ARGS) printError("More than 8 args not supported yet");
+
+        for (int i = 0; i < n; i++) {
+            auto* arg = fn->_arguments[i];
+            std::string name = baseIdentName(arg->_identifier);
+
+            // reserve slot
+            m_local_size += 8;
+
+            bool is_mut = false;
+            if (m_mode == FuncMode::Procedure && arg->_qualifier) {
+                auto qt = arg->_qualifier->_token->getTokenType();
+                if (qt == TokenType::_var) is_mut = true;
+            }
+            // functions: always const
+            if (m_mode == FuncMode::Function) is_mut = false;
+
+            m_scopes[m_current_scope][name] = m_local_size;
+
+            if (!m_count_only) {
+                store_var("x" + std::to_string(i), m_scopes[m_current_scope][name], indent);
+            }
+        }
+    }
+
+    void emitPrologue(int frame_size, int indent) {
+        emit("stp x29, x30, [sp, -16]!", "save fp/lr", indent);
+        emit("mov x29, sp", "set fp", indent);
+        if (frame_size > 0) emit("sub sp, sp, #" + std::to_string(frame_size), "alloc frame", indent);
+    }
+
+    void emitEpilogue(int indent) {
+        emit("mov sp, x29", "restore sp", indent);
+        emit("ldp x29, x30, [sp], 16", "restore fp/lr", indent);
+        emit("ret", "return", indent);
+    }
+
+    void generateFunctionDecleration(NodeFunctionDecleration* node_function_decleration, int indent) {
+        // TODO: assert that it is a global scope
+ 
+        NodeIdentifier* node_identifier = node_function_decleration->_identifier;
+        if (node_identifier->_access_token) printError("member function not implemented");
+
+        NodeIdentifierToken* node_identifier_token = std::get<NodeIdentifierToken*>(node_identifier->_identifier);
+        std::string name = node_identifier_token->_token->getStrValue();
+
+        // pass 1: count only
+        resetFrameTracking();
+        m_count_only = true;
+        m_mode = *node_function_decleration->is_procedure
+                ? FuncMode::Procedure
+                : FuncMode::Function;
+
+        push_scope();
+        bindAndStoreParams(node_function_decleration, indent);
+
+        if (node_function_decleration->_statement) generateStatement(node_function_decleration->_statement, indent);
+        else generateExpression(node_function_decleration->_expression, indent);
+
+        pop_scope();
+
+        int fn_frame = align16(m_local_size + m_max_temp_size);
+
+        // pass 2: generate code
+        resetFrameTracking();
+        m_count_only = false;
+        m_has_explicit_return = false;
+
+        emit("");
+        emit(".global " + name);
+        emit(name + ":");
+        emitPrologue(fn_frame, indent);
+
+        m_mode = *node_function_decleration->is_procedure
+                ? FuncMode::Procedure
+                : FuncMode::Function;
+
+        push_scope();
+        bindAndStoreParams(node_function_decleration, indent);
+
+        if (node_function_decleration->_statement) {
+            // implicit fallthrough return for procedures
+            if (node_function_decleration->_statement) {
+                generateStatement(node_function_decleration->_statement, indent);
+                if (!m_has_explicit_return && m_mode == FuncMode::Procedure) {
+                    emitEpilogue(indent);
+                }
+            }
+        } else {
+            // expression body:
+            generateExpression(node_function_decleration->_expression, indent);
+            emitEpilogue(indent);
+        }
+
+        pop_scope();
+
+        m_mode = FuncMode::None;
+    }
+
     void generateElement(NodeProgramElement *element, int indent)
     {
         if (std::holds_alternative<NodeStatement *>(element->_element))
@@ -668,9 +873,9 @@ public:
         }
         else if (std::holds_alternative<NodeFunctionDecleration *>(element->_element))
         {
-            NodeFunctionDecleration *function_decleration = std::get<NodeFunctionDecleration *>(element->_element);
+            NodeFunctionDecleration *node_function_decleration = std::get<NodeFunctionDecleration *>(element->_element);
             printDebug("Generating functionDecleration");
-            // printFunctionDecleration(function_decleration, indent);
+            generateFunctionDecleration(node_function_decleration, indent);
         }
         else if (std::holds_alternative<NodeTypealias *>(element->_element))
         {
@@ -688,6 +893,7 @@ public:
         m_local_size = 0;
         m_temp_size = 0;
         m_max_temp_size = 0;
+        m_has_explicit_return = false;
     }
 
     void generateProgram(NodeProgram *program)
@@ -695,49 +901,40 @@ public:
         printDebug("cp1");
 
         Parser Parser;
-        // Parser.printProgram(program);
+        Parser.printProgram(program);
+
         int indent = 1;
 
-        // Pass 1: count only
-        printDebug("cp7");
+        // Pass 1: count _main locals only
         resetFrameTracking();
-        printDebug("cp8");
-
         m_count_only = true;
-        for (auto element : program->_elements)
-        {
-            printDebug("cp5");
-            generateElement(element, indent);
-            printDebug("cp6");
+        for (auto e : program->_elements) {
+            if (std::holds_alternative<NodeFunctionDecleration*>(e->_element)) continue;
+            generateElement(e, indent);
         }
-
-        // Pass 2: code generation
         m_frame_size = align16(m_local_size + m_max_temp_size);
 
-        resetFrameTracking();
+        // Pass 2: emit functions
         m_count_only = false;
-
-        printDebug(std::string("generating program ") + std::to_string((program->_elements).size()));
-
-        printDebug("cp4");
-        emit(".global _main");
-        printDebug("scope_size::" + std::to_string(m_current_scope));
-        push_scope();
-        printDebug("scope_size::" + std::to_string(m_current_scope));
-
-        emit("_main:");
-        emit("stp x29, x30, [sp, -16]!", "store pair fp & lr", indent);
-        emit("mov x29, sp", "store sp", indent);
-        emit("sub sp, sp, #" + std::to_string(m_frame_size), "allocate " + std::to_string(m_frame_size) + "-byte stack frame", indent);
-
-        for (auto element : program->_elements)
-        {
-            generateElement(element, indent);
+        for (auto e : program->_elements) {
+            if (std::holds_alternative<NodeFunctionDecleration*>(e->_element)) generateElement(e, indent);
         }
 
-        printDebug("scope_size::" + std::to_string(m_current_scope));
+        // Pass 2: emit _main
+        resetFrameTracking();
+        m_count_only = false;
+        emit(".global _main");
+        emit("_main:");
+        emitPrologue(m_frame_size, indent);
+
+        push_scope();
+        for (auto e : program->_elements) {
+            if (std::holds_alternative<NodeFunctionDecleration*>(e->_element)) continue;
+            generateElement(e, indent);
+        }
         pop_scope();
-        printDebug("scope_size::" + std::to_string(m_current_scope));
+
+        emitEpilogue(indent);
     }
 
     void printError(std::string error_msg)
