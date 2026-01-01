@@ -880,7 +880,7 @@ public:
         else if (std::holds_alternative<NodeTypealias *>(element->_element))
         {
             NodeTypealias *node_typealias = std::get<NodeTypealias *>(element->_element);
-            printError("cant hold NodeTypealias");
+            printError("NodeTypealias not implemented");
             // printTypealias(node_typealias, indent);
         }
     }
