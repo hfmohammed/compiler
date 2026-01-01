@@ -107,7 +107,6 @@ The Makefile performs the following steps:
 The Makefile is intended for rapid iteration and debugging during compiler development.
 
 ## Files
-
 * `src/tokenization.hpp` Token definitions and lexical utilities
 * `src/parser.hpp` AST definitions and parsing logic
 * `src/generator.hpp` ARM64 code generation backend
@@ -117,9 +116,8 @@ The Makefile is intended for rapid iteration and debugging during compiler devel
 * `grammar.md` defines grammar
 
 ## Documentation
-
-- 📘 [Language Grammar](grammar.md)
-- 🧠 Parser & AST Design (coming soon)
+* 📘 [Language Grammar](grammar.md)
+* 🧠 Parser & AST Design (coming soon)
 
 ## Limitations and Future Work
 
