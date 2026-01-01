@@ -1,0 +1,5 @@
+log.txt
+*.o
+.idea/
+.vscode/
+output.s

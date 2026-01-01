@@ -1,0 +1,15 @@
+function g () returns integer {
+  if (0) {
+    return 3;
+  }
+  else {
+    return 8;
+  }
+}
+
+function main() returns integer {
+    var integer x = g();
+    return x;
+}
+
+return main();

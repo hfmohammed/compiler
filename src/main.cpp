@@ -6,8 +6,13 @@
 
 #include "./tokenization.hpp"
 #include "./parser.hpp"
-#include "./generation.hpp"
+#include "./generator.hpp"
 
+void printDebug(std::string msg) {
+    #if DEBUG
+        std::cout << std::string(CYAN) + "[debug] " + msg + "\033[0m" << std::endl;
+    #endif
+}
 
 int main(int argc, char* argv[]) {
     if (argc != 2) {
@@ -29,29 +34,13 @@ int main(int argc, char* argv[]) {
 
     Tokenizer tokenizer(content);
     std::vector<Token> tokens = tokenizer.tokenize();
-    
-    Parser parser(std::move(tokens));
-    std::optional<NodeProg> tree = parser.parse_prog();
 
-    if (!tree.has_value()) {
-        std::cerr << "Invalid Program" << std::endl;
-        exit(EXIT_FAILURE);
-    }
+    Parser parser(tokens);
+    NodeProgram* program = parser.parse();
 
-    Generator generator(tree.value());
-    {
-        std::ofstream ofile("test.asm");
-        if (!ofile) {
-            std::cerr << "File not found" << std::endl;
-            exit(EXIT_FAILURE);
-        }
-        ofile << generator.gen_prog();
-    }
-
-    if (system("nasm -felf64 test.asm -o test.o") != 0)
-        std::cerr << "NASM failed\n";
-    if (system("ld -o test test.o") != 0)
-        std::cerr << "Linker failed\n";
+    printDebug("cp3");
+    Generator generator(program);
+    generator.generate();
 
     return EXIT_SUCCESS;
 }
