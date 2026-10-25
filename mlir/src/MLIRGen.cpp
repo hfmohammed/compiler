@@ -354,6 +354,25 @@ private:
     b.setInsertionPointToStart(blk);
   }
 
+  struct LoopCtx {
+    Block *cont, *exit;
+  };
+  std::vector<LoopCtx> loops;
+
+  Block *newBlock() {
+    mlir::OpBuilder::InsertionGuard g(b);
+    return b.createBlock(&curFn.getBody());
+  }
+  void branchIfOpen(Block *dest) {
+    if (!terminated()) mlir::cf::BranchOp::create(b, b.getUnknownLoc(), dest);
+  }
+  Value genCond(const Expr &e, const char *what) {
+    Val c = genExpr(e);
+    if (c.t != Type::Boolean)
+      throw err("TypeError", e.line, std::string("'") + what + "' condition must be boolean");
+    return c.v;
+  }
+
   void genBlock(const std::vector<StmtP> &stmts) {
     scopes.emplace_back();
     for (auto &s : stmts) {
@@ -438,11 +457,48 @@ private:
       }
       return;
     }
-    case Stmt::If:
-    case Stmt::Loop:
+    case Stmt::If: {
+      Value c = genCond(*s.expr, "if");
+      Block *thenB = newBlock(), *elseB = newBlock(), *merge = newBlock();
+      mlir::cf::CondBranchOp::create(b, loc, c, thenB, elseB);
+      b.setInsertionPointToStart(thenB);
+      genBlock(s.body);
+      branchIfOpen(merge);
+      b.setInsertionPointToStart(elseB);
+      genBlock(s.elseBody);
+      branchIfOpen(merge);
+      b.setInsertionPointToStart(merge);
+      return;
+    }
+    case Stmt::Loop: {
+      Block *bodyB = newBlock(), *exitB = newBlock();
+      Block *condB = s.loopKind == Stmt::Forever ? nullptr : newBlock();
+      // `continue` re-tests the condition, or restarts an unconditional loop.
+      Block *contB = condB ? condB : bodyB;
+      mlir::cf::BranchOp::create(b, loc, s.loopKind == Stmt::PreTest ? condB : bodyB);
+      if (condB) {
+        b.setInsertionPointToStart(condB);
+        Value c = genCond(*s.expr, "loop");
+        mlir::cf::CondBranchOp::create(b, loc, c, bodyB, exitB);
+      }
+      loops.push_back({contB, exitB});
+      b.setInsertionPointToStart(bodyB);
+      genBlock(s.body);
+      branchIfOpen(contB);
+      loops.pop_back();
+      b.setInsertionPointToStart(exitB);
+      return;
+    }
     case Stmt::Break:
-    case Stmt::Continue:
-      throw err("SyntaxError", s.line, "control flow not implemented yet");
+    case Stmt::Continue: {
+      if (loops.empty())
+        throw err("SyntaxError", s.line,
+                  s.kind == Stmt::Break ? "'break' outside of a loop"
+                                        : "'continue' outside of a loop");
+      mlir::cf::BranchOp::create(
+          b, loc, s.kind == Stmt::Break ? loops.back().exit : loops.back().cont);
+      return;
+    }
     }
   }
 
@@ -459,6 +515,7 @@ private:
     curRet = f.ret;
 
     scopes.clear();
+    loops.clear();
     scopes.emplace_back();
     for (size_t i = 0; i < f.params.size(); i++) {
       Value mem = newSlot(loc, f.params[i].type);
