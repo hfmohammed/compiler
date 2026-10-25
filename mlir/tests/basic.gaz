@@ -1,0 +1,11 @@
+function sq(integer x) returns integer = x * x;
+
+procedure main() returns integer {
+  var integer i = 0;
+  loop while (i < 3) {
+    sq(i) -> std_output;
+    '\n' -> std_output;
+    i = i + 1;
+  }
+  return 0;
+}

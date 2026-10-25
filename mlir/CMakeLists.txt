@@ -14,4 +14,5 @@ add_library(gazrt STATIC runtime/runtime.c)
 
 add_executable(gazc
   src/Lexer.cpp
+  src/Parser.cpp
   src/main.cpp)

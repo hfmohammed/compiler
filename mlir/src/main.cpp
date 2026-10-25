@@ -1,4 +1,4 @@
-#include "Lexer.h"
+#include "Parser.h"
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -12,8 +12,8 @@ int main(int argc, char **argv) {
   std::stringstream ss;
   ss << in.rdbuf();
   try {
-    auto toks = gaz::lex(ss.str());
-    std::cout << toks.size() << " tokens\n";
+    auto prog = gaz::parse(gaz::lex(ss.str()));
+    std::cout << prog.funcs.size() << " functions parsed\n";
   } catch (std::exception &e) {
     std::cerr << e.what() << "\n";
     return 1;
