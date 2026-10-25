@@ -1,0 +1,4 @@
+procedure main() returns integer {
+  var integer i = 2147483648;
+  return 0;
+}

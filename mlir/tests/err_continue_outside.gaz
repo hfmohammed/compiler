@@ -1,0 +1,4 @@
+procedure main() returns integer {
+  continue;
+  return 0;
+}

@@ -1,0 +1,5 @@
+function fib(integer n) returns integer {
+  if (n < 2) { return n; }
+  return fib(n - 1) + fib(n - 2);
+}
+procedure main() returns integer { fib(38) -> std_output; '\n' -> std_output; return 0; }

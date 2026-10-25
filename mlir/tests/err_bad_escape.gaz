@@ -1,0 +1,4 @@
+procedure main() returns integer {
+  var character c = '\q';
+  return 0;
+}

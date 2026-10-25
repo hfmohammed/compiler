@@ -1,0 +1,4 @@
+procedure main() returns integer {
+  var boolean b; b <- std_input;
+  return 0;
+}

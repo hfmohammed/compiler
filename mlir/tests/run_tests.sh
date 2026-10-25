@@ -1,7 +1,7 @@
 #!/bin/bash
 # For each tests/*.gaz: compile, run (stdin from .in if present), compare stdout
 # with .out, and the exit code with .code (default 0). A .stderr file holds a
-# substring the runtime error must contain. Programs whose .out starts with "ERR" must fail to compile.
+# substring the runtime error must contain. Programs whose .out is "ERR <Kind>" must fail to compile with that error kind.
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TMP="$(mktemp -d)"
 pass=0; fail=0
@@ -10,8 +10,11 @@ for src in "$ROOT"/tests/*.gaz; do
   exp="$ROOT/tests/$name.out"
   [ -f "$exp" ] || continue
   if head -c 3 "$exp" | grep -q '^ERR'; then
-    if "$ROOT/build/gazc" "$src" -o /dev/null 2>/dev/null; then
+    want="$(cut -d' ' -f2 "$exp")"
+    if "$ROOT/build/gazc" "$src" -o /dev/null 2>"$TMP/err"; then
       echo "FAIL $name (expected compile error)"; fail=$((fail+1))
+    elif ! head -1 "$TMP/err" | grep -q "^$want"; then
+      echo "FAIL $name (expected $want, got: $(head -1 "$TMP/err"))"; fail=$((fail+1))
     else echo "ok   $name"; pass=$((pass+1)); fi
     continue
   fi

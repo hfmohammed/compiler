@@ -1,0 +1,4 @@
+procedure main() returns integer {
+  var boolean b = as<boolean>(1.5);
+  return 0;
+}

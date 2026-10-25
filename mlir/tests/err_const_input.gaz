@@ -1,0 +1,4 @@
+procedure main() returns integer {
+  const integer c = 1; c <- std_input;
+  return 0;
+}

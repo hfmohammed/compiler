@@ -1,0 +1,7 @@
+procedure main() returns integer {
+  var real z = 0.0;
+  (1.0 / z) -> std_output; '\n' -> std_output;
+  (-1.0 / z) -> std_output; '\n' -> std_output;
+  (0.0 / z == 0.0 / z) -> std_output; '\n' -> std_output;
+  return 0;
+}

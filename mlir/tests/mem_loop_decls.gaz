@@ -1,0 +1,14 @@
+procedure main() returns integer {
+  var integer i = 0;
+  var integer acc = 0;
+  loop while (i < 20000000) {
+    var integer a = i % 3;
+    var real b = a;
+    var boolean c = a == 1;
+    var character d = 'x';
+    if (c) { acc = acc + a; }
+    i = i + 1;
+  }
+  acc -> std_output; '\n' -> std_output;
+  return 0;
+}

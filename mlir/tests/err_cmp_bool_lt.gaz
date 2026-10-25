@@ -1,0 +1,4 @@
+procedure main() returns integer {
+  var boolean b = true < false;
+  return 0;
+}

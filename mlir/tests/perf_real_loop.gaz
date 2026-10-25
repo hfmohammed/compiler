@@ -1,0 +1,6 @@
+procedure main() returns integer {
+  var real x = 0.0; var integer i = 0;
+  loop while (i < 50000000) { x = x + 0.5; i = i + 1; }
+  x -> std_output; '\n' -> std_output;
+  return 0;
+}

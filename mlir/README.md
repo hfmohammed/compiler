@@ -46,3 +46,22 @@ number and exit non-zero; runtime errors (e.g. division by zero) print
 
 Tuples, structs, arrays/vectors/strings/matrices, generators, typealias,
 globals, prototypes, `-O2` flag handling.
+
+## Tests
+
+`tests/run_tests.sh` builds and runs every `tests/*.gaz` that has a `.out` file.
+
+| Prefix | What it checks |
+|---|---|
+| (none) | language coverage: operators, precedence, casts, scopes, control flow, functions, I/O |
+| `err_*` | compile errors; `.out` is `ERR <Kind>` and the error kind must match |
+| `rt_*` | runtime errors: exit code 1, message in `.stderr`, earlier output still flushed |
+| `edge_*` | defined behaviour at limits (`INT_MIN / -1`, negative powers, inf/NaN) |
+| `mem_*` | stack safety: loop-body declarations do not grow the stack, deep recursion, many locals |
+| `perf_*` | compute-heavy programs (20 s timeout each); expected values computed independently |
+
+Optional per-test files: `.in` (stdin), `.code` (expected exit code, default 0),
+`.stderr` (substring the runtime error must contain).
+
+Note: `real` is 32-bit, so e.g. summing 0.5 stops growing at 2^23, and
+`integer` arithmetic wraps on overflow.

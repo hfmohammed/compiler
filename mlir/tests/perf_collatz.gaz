@@ -1,0 +1,18 @@
+function steps(integer start) returns integer {
+  var integer n = start; var integer c = 0;
+  loop while (n != 1) {
+    if (n % 2 == 0) { n = n / 2; } else { n = 3 * n + 1; }
+    c = c + 1;
+  }
+  return c;
+}
+procedure main() returns integer {
+  var integer best = 1; var integer bestSteps = 0; var integer i = 1;
+  loop while (i < 100000) {
+    var integer s = steps(i);
+    if (s > bestSteps) { bestSteps = s; best = i; }
+    i = i + 1;
+  }
+  best -> std_output; ' ' -> std_output; bestSteps -> std_output; '\n' -> std_output;
+  return 0;
+}

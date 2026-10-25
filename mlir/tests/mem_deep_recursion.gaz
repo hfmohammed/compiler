@@ -1,0 +1,8 @@
+function depth(integer n) returns integer {
+  if (n == 0) { return 0; }
+  return 1 + depth(n - 1);
+}
+procedure main() returns integer {
+  depth(50000) -> std_output; '\n' -> std_output;
+  return 0;
+}

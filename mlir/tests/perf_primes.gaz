@@ -1,0 +1,15 @@
+function isPrime(integer n) returns boolean {
+  if (n < 2) { return false; }
+  var integer i = 2;
+  loop while (i * i <= n) {
+    if (n % i == 0) { return false; }
+    i = i + 1;
+  }
+  return true;
+}
+procedure main() returns integer {
+  var integer n = 0; var integer count = 0;
+  loop while (n < 300000) { if (isPrime(n)) { count = count + 1; } n = n + 1; }
+  count -> std_output; '\n' -> std_output;
+  return 0;
+}

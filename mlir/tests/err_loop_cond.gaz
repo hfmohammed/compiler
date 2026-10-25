@@ -1,0 +1,4 @@
+procedure main() returns integer {
+  loop while (1.5) { break; }
+  return 0;
+}

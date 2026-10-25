@@ -1,0 +1,4 @@
+procedure main() returns integer {
+  const integer c = 1; c = 2;
+  return 0;
+}

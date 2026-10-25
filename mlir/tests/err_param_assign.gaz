@@ -1,0 +1,5 @@
+function f(integer x) returns integer { x = 2; return x; }
+procedure main() returns integer {
+  var integer r = f(1);
+  return 0;
+}

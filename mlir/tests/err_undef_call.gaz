@@ -1,0 +1,4 @@
+procedure main() returns integer {
+  call nope();
+  return 0;
+}

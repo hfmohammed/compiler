@@ -1,0 +1,4 @@
+procedure main() returns integer {
+  var real r = 1.5 % 2.0;
+  return 0;
+}
