@@ -53,7 +53,7 @@ int main(int argc, char **argv) {
   }
 
   try {
-    auto prog = gaz::parse(gaz::lex(ss.str()));
+    auto prog = gaz::parse(ss.str());
     auto module = gaz::genMLIR(ctx, prog);
     if (mlir::failed(mlir::verify(*module))) return 3;
     if (mode == Mlir) {

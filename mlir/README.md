@@ -4,13 +4,15 @@ Compiles a subset of [Gazprea](https://cmput415.github.io/415-docs/gazprea/) to
 native code through MLIR.
 
 ```
-source → Lexer → Parser → AST → MLIRGen → func/arith/cf/memref
+source → ANTLR lexer/parser (grammar/Gazprea.g4) → AST → MLIRGen → func/arith/cf/memref
        → (lowering passes) → LLVM dialect → LLVM IR → clang + runtime.c → exe
 ```
 
 ## Build
 
-Requires an LLVM/MLIR install (tested with Homebrew `llvm`) and CMake ≥ 3.20.
+Requires an LLVM/MLIR install (tested with Homebrew `llvm`), CMake ≥ 3.20 and
+Java. CMake downloads the ANTLR 4.13.2 tool jar and C++ runtime on first
+configure (network needed) and generates the lexer/parser from the grammar.
 
 ```
 P=/opt/homebrew/opt/llvm
