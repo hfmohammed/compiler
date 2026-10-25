@@ -1,0 +1,32 @@
+procedure main() returns integer {
+  as<integer>(3.9) -> std_output;
+  '\n' -> std_output;
+  as<integer>(-3.9) -> std_output;
+  '\n' -> std_output;
+  as<real>(2) -> std_output;
+  '\n' -> std_output;
+  as<integer>('a') -> std_output;
+  '\n' -> std_output;
+  as<character>(66) -> std_output;
+  '\n' -> std_output;
+  as<boolean>(0) -> std_output;
+  '\n' -> std_output;
+  as<boolean>(5) -> std_output;
+  '\n' -> std_output;
+  as<integer>(true) -> std_output;
+  '\n' -> std_output;
+  as<integer>(false) -> std_output;
+  '\n' -> std_output;
+  as<boolean>('a') -> std_output;
+  '\n' -> std_output;
+  as<real>('a') -> std_output;
+  '\n' -> std_output;
+  as<character>(true) -> std_output;
+  '\n' -> std_output;
+  as<integer>(as<character>(321)) -> std_output;
+  '\n' -> std_output;
+  as<real>(as<integer>(2.7)) -> std_output;
+  '\n' -> std_output;
+
+  return 0;
+}

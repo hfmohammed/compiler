@@ -1,0 +1,11 @@
+procedure main() returns integer {
+  var integer x = 1;
+  { var integer x = 2; { var integer x = 3; x -> std_output; } x -> std_output; }
+  x -> std_output; '\n' -> std_output;
+  if (true) { var real x = 9.5; x -> std_output; }
+  x -> std_output; '\n' -> std_output;
+  loop while (x < 3) { var integer x = 100; x -> std_output; break; }
+  '\n' -> std_output;
+  x -> std_output; '\n' -> std_output;
+  return 0;
+}

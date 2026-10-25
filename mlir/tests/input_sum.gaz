@@ -1,0 +1,7 @@
+procedure main() returns integer {
+  var integer n; var integer s = 0; var integer k = 0;
+  n <- std_input;
+  loop while (k < n) { var integer v; v <- std_input; s = s + v; k = k + 1; }
+  s -> std_output; '\n' -> std_output;
+  return 0;
+}

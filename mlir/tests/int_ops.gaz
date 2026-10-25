@@ -1,0 +1,36 @@
+procedure main() returns integer {
+  0 -> std_output;
+  '\n' -> std_output;
+  2147483647 -> std_output;
+  '\n' -> std_output;
+  7+3 -> std_output;
+  '\n' -> std_output;
+  7-3 -> std_output;
+  '\n' -> std_output;
+  7*3 -> std_output;
+  '\n' -> std_output;
+  7/3 -> std_output;
+  '\n' -> std_output;
+  7%3 -> std_output;
+  '\n' -> std_output;
+  -7/2 -> std_output;
+  '\n' -> std_output;
+  -7%2 -> std_output;
+  '\n' -> std_output;
+  7/-2 -> std_output;
+  '\n' -> std_output;
+  2^8 -> std_output;
+  '\n' -> std_output;
+  2^0 -> std_output;
+  '\n' -> std_output;
+  0^0 -> std_output;
+  '\n' -> std_output;
+  (-2)^3 -> std_output;
+  '\n' -> std_output;
+  10-3-2 -> std_output;
+  '\n' -> std_output;
+  100/10/5 -> std_output;
+  '\n' -> std_output;
+
+  return 0;
+}

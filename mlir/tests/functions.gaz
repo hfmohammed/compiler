@@ -1,0 +1,29 @@
+function sq(integer x) returns integer = x * x;
+function avg(real a, real b) returns real = (a + b) / 2;
+function isEven(integer n) returns boolean = n % 2 == 0;
+function widen(integer n) returns real = n;
+function twice(integer n) returns integer { return add(n, n); }
+function add(integer a, integer b) returns integer { return a + b; }
+function first(character c, integer n) returns character { return c; }
+
+procedure hello() { 'h' -> std_output; 'i' -> std_output; '\n' -> std_output; }
+procedure bump(integer x) returns integer { return x + 1; }
+procedure early(integer x) {
+  if (x > 0) { 'p' -> std_output; return; }
+  'n' -> std_output;
+}
+
+procedure main() returns integer {
+  sq(7) -> std_output; '\n' -> std_output;
+  avg(1, 2) -> std_output; '\n' -> std_output;
+  isEven(10) -> std_output; isEven(7) -> std_output; '\n' -> std_output;
+  widen(3) -> std_output; '\n' -> std_output;
+  twice(21) -> std_output; '\n' -> std_output;
+  first('q', 1) -> std_output; '\n' -> std_output;
+  call hello();
+  call early(1); call early(-1); '\n' -> std_output;
+  call bump(1);
+  bump(bump(bump(0))) -> std_output; '\n' -> std_output;
+  sq(sq(3)) + sq(2) -> std_output; '\n' -> std_output;
+  return 0;
+}

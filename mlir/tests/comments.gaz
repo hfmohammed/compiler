@@ -1,0 +1,9 @@
+// line comment
+/* block
+   comment */ procedure main() returns integer {
+  1 -> std_output; // trailing
+  /* inline */ 2 -> std_output;
+  '/' -> std_output; /* ** / // */ 3 -> std_output;
+  '\n' -> std_output;
+  return 0;
+}

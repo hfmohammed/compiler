@@ -1,0 +1,11 @@
+procedure main() returns integer {
+  'h' -> std_output; 'i' -> std_output; '\n' -> std_output;
+  '\t' -> std_output; 'x' -> std_output; '\n' -> std_output;
+  '\\' -> std_output; '\'' -> std_output; '"' -> std_output; '\n' -> std_output;
+  as<integer>('\0') -> std_output; '\n' -> std_output;
+  var character c = 'A';
+  c -> std_output; '\n' -> std_output;
+  c = as<character>(as<integer>(c) + 1);
+  c -> std_output; '\n' -> std_output;
+  return 0;
+}

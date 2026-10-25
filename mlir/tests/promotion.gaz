@@ -1,0 +1,12 @@
+procedure main() returns integer {
+  var real r = 3;
+  r -> std_output; '\n' -> std_output;
+  (1 + 0.5) -> std_output; '\n' -> std_output;
+  (7 / 2.0) -> std_output; '\n' -> std_output;
+  (7 / 2) -> std_output; '\n' -> std_output;
+  r = 4;
+  (r * 2) -> std_output; '\n' -> std_output;
+  (3 == 3.0) -> std_output; '\n' -> std_output;
+  (2 < 2.5) -> std_output; '\n' -> std_output;
+  return 0;
+}

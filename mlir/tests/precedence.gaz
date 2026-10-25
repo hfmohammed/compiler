@@ -1,0 +1,28 @@
+procedure main() returns integer {
+  2+3*4 -> std_output;
+  '\n' -> std_output;
+  (2+3)*4 -> std_output;
+  '\n' -> std_output;
+  -2^2 -> std_output;
+  '\n' -> std_output;
+  2^3^2 -> std_output;
+  '\n' -> std_output;
+  not true or true -> std_output;
+  '\n' -> std_output;
+  1+2 < 4 and 2*2 == 4 -> std_output;
+  '\n' -> std_output;
+  10-2*3+1 -> std_output;
+  '\n' -> std_output;
+  -3+5 -> std_output;
+  '\n' -> std_output;
+  - -4 -> std_output;
+  '\n' -> std_output;
+  -(-4)+1 -> std_output;
+  '\n' -> std_output;
+  2*3%4 -> std_output;
+  '\n' -> std_output;
+  8/2*3 -> std_output;
+  '\n' -> std_output;
+
+  return 0;
+}

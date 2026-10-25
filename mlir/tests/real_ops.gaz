@@ -1,0 +1,24 @@
+procedure main() returns integer {
+  1.5+2.25 -> std_output;
+  '\n' -> std_output;
+  5.0/2.0 -> std_output;
+  '\n' -> std_output;
+  2.0*3.5 -> std_output;
+  '\n' -> std_output;
+  -1.5 -> std_output;
+  '\n' -> std_output;
+  3.0-0.5 -> std_output;
+  '\n' -> std_output;
+  2.0^3.0 -> std_output;
+  '\n' -> std_output;
+  1e2 -> std_output;
+  '\n' -> std_output;
+  1.5e-1 -> std_output;
+  '\n' -> std_output;
+  .5+.5 -> std_output;
+  '\n' -> std_output;
+  0.1 -> std_output;
+  '\n' -> std_output;
+
+  return 0;
+}

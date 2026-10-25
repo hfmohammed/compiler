@@ -1,0 +1,7 @@
+procedure main() returns integer {
+  var integer i; var real r; var character c; var character d;
+  i <- std_input; r <- std_input; c <- std_input; c <- std_input; d <- std_input;
+  i -> std_output; ' ' -> std_output; r -> std_output; ' ' -> std_output;
+  c -> std_output; d -> std_output; '\n' -> std_output;
+  return 0;
+}

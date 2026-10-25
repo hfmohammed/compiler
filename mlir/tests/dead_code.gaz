@@ -1,0 +1,12 @@
+function f(integer x) returns integer {
+  if (x > 0) { return 1; } else { return 2; }
+  return 3;
+}
+procedure main() returns integer {
+  f(1) -> std_output; f(-1) -> std_output; '\n' -> std_output;
+  loop { break; 'X' -> std_output; }
+  var integer i = 0;
+  loop while (i < 3) { i = i + 1; continue; 'Y' -> std_output; }
+  return i;
+  'Z' -> std_output;
+}

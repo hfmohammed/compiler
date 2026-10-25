@@ -1,0 +1,17 @@
+procedure main() returns integer {
+  var integer i = 0;
+  loop while (i < 4) {
+    var integer j = 0;
+    loop while (j < 4) {
+      j = j + 1;
+      if (j == 2) { continue; }
+      if (j == 4) { break; }
+      (i * 10 + j) -> std_output; ' ' -> std_output;
+    }
+    i = i + 1;
+    if (i == 3) { break; }
+  }
+  '\n' -> std_output;
+  i -> std_output; '\n' -> std_output;
+  return 0;
+}

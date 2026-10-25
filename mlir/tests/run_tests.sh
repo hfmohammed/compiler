@@ -1,6 +1,7 @@
 #!/bin/bash
 # For each tests/*.gaz: compile, run (stdin from .in if present), compare stdout
-# with .out. Programs whose .out starts with "ERR" must fail to compile.
+# with .out, and the exit code with .code (default 0). A .stderr file holds a
+# substring the runtime error must contain. Programs whose .out starts with "ERR" must fail to compile.
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TMP="$(mktemp -d)"
 pass=0; fail=0
@@ -18,7 +19,15 @@ for src in "$ROOT"/tests/*.gaz; do
     echo "FAIL $name (compile)"; cat "$TMP/err"; fail=$((fail+1)); continue
   fi
   inp=/dev/null; [ -f "$ROOT/tests/$name.in" ] && inp="$ROOT/tests/$name.in"
-  "$TMP/$name" <"$inp" >"$TMP/out" 2>/dev/null
+  perl -e 'alarm 20; exec @ARGV' "$TMP/$name" <"$inp" >"$TMP/out" 2>"$TMP/rterr"
+  code=$?
+  want=0; [ -f "$ROOT/tests/$name.code" ] && want="$(cat "$ROOT/tests/$name.code")"
+  if [ "$code" != "$want" ]; then
+    echo "FAIL $name (exit $code, expected $want)"; fail=$((fail+1)); continue
+  fi
+  if [ -f "$ROOT/tests/$name.stderr" ] && ! grep -qF -f "$ROOT/tests/$name.stderr" "$TMP/rterr"; then
+    echo "FAIL $name (stderr)"; fail=$((fail+1)); continue
+  fi
   if cmp -s "$TMP/out" "$exp"; then echo "ok   $name"; pass=$((pass+1))
   else echo "FAIL $name"; diff "$TMP/out" "$exp" | head -5; fail=$((fail+1)); fi
 done

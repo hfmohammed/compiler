@@ -1,0 +1,9 @@
+procedure mutate(integer x) returns integer {
+  return x * 2;
+}
+procedure main() returns integer {
+  var integer a = 5;
+  var integer b = mutate(a);
+  a -> std_output; ' ' -> std_output; b -> std_output; '\n' -> std_output;
+  return 0;
+}

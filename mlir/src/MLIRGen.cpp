@@ -554,6 +554,24 @@ private:
         mlir::func::ReturnOp::create(b, loc, z);
       }
     }
+    pruneUnreachable();
+  }
+
+  // Dialect conversion never visits unreachable blocks, so drop them (and any
+  // blocks that only they reach) before lowering.
+  void pruneUnreachable() {
+    bool changed = true;
+    while (changed) {
+      changed = false;
+      std::vector<Block *> dead;
+      for (Block &blk : curFn.getBody())
+        if (&blk != entry && blk.hasNoPredecessors()) dead.push_back(&blk);
+      for (Block *blk : dead) {
+        blk->dropAllReferences();
+        blk->erase();
+        changed = true;
+      }
+    }
   }
 };
 

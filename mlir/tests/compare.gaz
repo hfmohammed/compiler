@@ -1,0 +1,32 @@
+procedure main() returns integer {
+  1 < 2 -> std_output;
+  '\n' -> std_output;
+  2 < 1 -> std_output;
+  '\n' -> std_output;
+  2 <= 2 -> std_output;
+  '\n' -> std_output;
+  3 >= 4 -> std_output;
+  '\n' -> std_output;
+  5 > 4 -> std_output;
+  '\n' -> std_output;
+  1 == 1 -> std_output;
+  '\n' -> std_output;
+  1 != 1 -> std_output;
+  '\n' -> std_output;
+  1.5 < 2.5 -> std_output;
+  '\n' -> std_output;
+  1.5 >= 1.5 -> std_output;
+  '\n' -> std_output;
+  'a' == 'a' -> std_output;
+  '\n' -> std_output;
+  'a' != 'b' -> std_output;
+  '\n' -> std_output;
+  true == true -> std_output;
+  '\n' -> std_output;
+  true != false -> std_output;
+  '\n' -> std_output;
+  (1<2) == (3<4) -> std_output;
+  '\n' -> std_output;
+
+  return 0;
+}

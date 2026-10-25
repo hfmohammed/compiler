@@ -1,0 +1,13 @@
+procedure main() returns integer {
+  var integer i = 0;
+  loop while (i < 6) {
+    if (i == 0) { 'a' -> std_output; }
+    else if (i == 1) { 'b' -> std_output; }
+    else if (i < 4) 'c' -> std_output;
+    else { 'd' -> std_output; }
+    if (i % 2 == 0) if (i > 2) 'E' -> std_output; else 'e' -> std_output;
+    i = i + 1;
+  }
+  '\n' -> std_output;
+  return 0;
+}

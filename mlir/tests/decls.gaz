@@ -1,0 +1,23 @@
+procedure main() returns integer {
+  var integer a;
+  var real b;
+  var boolean c;
+  var character d;
+  a -> std_output; '\n' -> std_output;
+  b -> std_output; '\n' -> std_output;
+  c -> std_output; '\n' -> std_output;
+  as<integer>(d) -> std_output; '\n' -> std_output;
+  const integer k = 5;
+  integer m = k * 2;
+  const n = m + 1;
+  var q = 2.5;
+  var z = true;
+  (m + n) -> std_output; '\n' -> std_output;
+  q -> std_output; '\n' -> std_output;
+  z -> std_output; '\n' -> std_output;
+  m = m + 1; q = q * 2; z = not z;
+  m -> std_output; '\n' -> std_output;
+  q -> std_output; '\n' -> std_output;
+  z -> std_output; '\n' -> std_output;
+  return 0;
+}

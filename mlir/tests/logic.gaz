@@ -1,0 +1,32 @@
+procedure main() returns integer {
+  (true and true) -> std_output;
+  '\n' -> std_output;
+  (true or true) -> std_output;
+  '\n' -> std_output;
+  (true xor true) -> std_output;
+  '\n' -> std_output;
+  (true and false) -> std_output;
+  '\n' -> std_output;
+  (true or false) -> std_output;
+  '\n' -> std_output;
+  (true xor false) -> std_output;
+  '\n' -> std_output;
+  (false and true) -> std_output;
+  '\n' -> std_output;
+  (false or true) -> std_output;
+  '\n' -> std_output;
+  (false xor true) -> std_output;
+  '\n' -> std_output;
+  (false and false) -> std_output;
+  '\n' -> std_output;
+  (false or false) -> std_output;
+  '\n' -> std_output;
+  (false xor false) -> std_output;
+  '\n' -> std_output;
+  not true -> std_output;
+  '\n' -> std_output;
+  not false -> std_output;
+  '\n' -> std_output;
+
+  return 0;
+}
