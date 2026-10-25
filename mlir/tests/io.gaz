@@ -1,0 +1,18 @@
+procedure main() returns integer {
+  var integer n = 0;
+  var integer sum = 0;
+  n <- std_input;
+  loop {
+    sum = sum + n;
+    n <- std_input;
+  } while (n != 0);
+  sum -> std_output;
+  '\n' -> std_output;
+  (sum > 5 and not (sum == 7)) -> std_output;
+  '\n' -> std_output;
+  as<integer>(3.9) -> std_output;
+  '\n' -> std_output;
+  2 ^ 10 -> std_output;
+  '\n' -> std_output;
+  return 0;
+}

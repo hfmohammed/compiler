@@ -1,0 +1,17 @@
+function fib(integer n) returns integer {
+  if (n < 2) { return n; }
+  return fib(n - 1) + fib(n - 2);
+}
+
+procedure main() returns integer {
+  var integer i = 0;
+  loop {
+    if (i == 5) { i = i + 1; continue; }
+    if (i > 10) { break; }
+    fib(i) -> std_output;
+    ' ' -> std_output;
+    i = i + 1;
+  }
+  '\n' -> std_output;
+  return 0;
+}

@@ -16,6 +16,7 @@ add_executable(gazc
   src/Lexer.cpp
   src/Parser.cpp
   src/MLIRGen.cpp
+  src/Lowering.cpp
   src/main.cpp)
 
 target_link_libraries(gazc PRIVATE
@@ -23,4 +24,14 @@ target_link_libraries(gazc PRIVATE
   MLIRControlFlowDialect
   MLIRFuncDialect
   MLIRMemRefDialect
-  MLIRIR)
+  MLIRIR
+  MLIRPass
+  MLIRLLVMDialect
+  MLIRArithToLLVM
+  MLIRControlFlowToLLVM
+  MLIRFuncToLLVM
+  MLIRMemRefToLLVM
+  MLIRReconcileUnrealizedCasts
+  MLIRBuiltinToLLVMIRTranslation
+  MLIRLLVMToLLVMIRTranslation
+  MLIRTargetLLVMIRExport)
