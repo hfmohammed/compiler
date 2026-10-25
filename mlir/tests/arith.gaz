@@ -1,0 +1,11 @@
+function half(real x) returns real = x / 2;
+
+procedure main() returns integer {
+  var integer a = 7;
+  const real b = 2.5;
+  a = a * 3 - 1;
+  (a + b) -> std_output;
+  '\n' -> std_output;
+  half(a) -> std_output;
+  return a % 4;
+}

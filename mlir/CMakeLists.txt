@@ -15,4 +15,12 @@ add_library(gazrt STATIC runtime/runtime.c)
 add_executable(gazc
   src/Lexer.cpp
   src/Parser.cpp
+  src/MLIRGen.cpp
   src/main.cpp)
+
+target_link_libraries(gazc PRIVATE
+  MLIRArithDialect
+  MLIRControlFlowDialect
+  MLIRFuncDialect
+  MLIRMemRefDialect
+  MLIRIR)
