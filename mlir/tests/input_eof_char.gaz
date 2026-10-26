@@ -1,0 +1,5 @@
+procedure main() returns integer {
+  var character c; c <- std_input;
+  as<integer>(c) -> std_output; ' ' -> std_output; stream_state(std_input) -> std_output;
+  return 0;
+}

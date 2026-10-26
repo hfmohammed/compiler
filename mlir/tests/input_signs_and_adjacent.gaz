@@ -1,0 +1,6 @@
+procedure main() returns integer {
+  var integer a; var integer b; var integer c;
+  a <- std_input; b <- std_input; c <- std_input;
+  a -> std_output; ' ' -> std_output; b -> std_output; ' ' -> std_output; c -> std_output;
+  return 0;
+}

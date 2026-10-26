@@ -1,0 +1,22 @@
+procedure main() returns integer {
+  loop i in 1..3 { i -> std_output; }
+  '\n' -> std_output;
+  loop i in 3..1 { 'X' -> std_output; }
+  loop i in -2..2 i -> std_output;
+  '\n' -> std_output;
+  loop i in 1..4 { if (i == 2) { continue; } if (i == 4) { break; } i -> std_output; }
+  '\n' -> std_output;
+  loop i in 1..2 { loop j in 1..3 { (i * 10 + j) -> std_output; ' ' -> std_output; } }
+  '\n' -> std_output;
+  var integer hi = 3;
+  loop i in 1..hi { hi = 10; i -> std_output; }
+  '\n' -> std_output;
+  loop i in 2147483646..2147483647 { i -> std_output; ' ' -> std_output; }
+  '\n' -> std_output;
+  var integer i = 99;
+  loop i in 1..2 { i -> std_output; }
+  i -> std_output; '\n' -> std_output;
+  loop k in 5..5 { k -> std_output; }
+  '\n' -> std_output;
+  return 0;
+}

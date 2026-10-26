@@ -1,0 +1,4 @@
+procedure main() returns integer {
+  loop i in 1..2.5 { }
+  return 0;
+}

@@ -107,6 +107,8 @@ private:
     declareExt("gaz_read_int", {}, {i32});
     declareExt("gaz_read_real", {}, {f32});
     declareExt("gaz_read_char", {}, {i8});
+    declareExt("gaz_read_bool", {}, {i32});
+    declareExt("gaz_stream_state", {}, {i32});
     declareExt("gaz_idiv", {i32, i32}, {i32});
     declareExt("gaz_imod", {i32, i32}, {i32});
     declareExt("gaz_ipow", {i32, i32}, {i32});
@@ -208,10 +210,19 @@ private:
         throw err("LiteralError", e.line, "integer literal does not fit in 32 bits");
       return {constInt(loc, b.getI32Type(), v), Type::Integer};
     }
-    case Expr::RealLit:
-      return {mlir::arith::ConstantOp::create(
-                  b, loc, b.getF32FloatAttr(std::stof(e.text))),
-              Type::Real};
+    case Expr::RealLit: {
+      float v;
+      try {
+        v = std::stof(e.text);
+      } catch (std::out_of_range &) {
+        throw err("LiteralError", e.line, "real literal does not fit in 32 bits");
+      }
+      return {mlir::arith::ConstantOp::create(b, loc, b.getF32FloatAttr(v)), Type::Real};
+    }
+    case Expr::StrLit:
+      throw err("TypeError", e.line, "string values are only supported as stream output");
+    case Expr::StreamState:
+      return {rtCall(loc, "gaz_stream_state", {b.getI32Type()}, {}), Type::Integer};
     case Expr::BoolLit:
       return {constInt(loc, b.getI1Type(), e.text == "true"), Type::Boolean};
     case Expr::CharLit:
@@ -463,6 +474,11 @@ private:
     }
     case Stmt::Output: {
       if (!curIsProc) throw err("StatementError", s.line, "I/O is not allowed in a function");
+      if (s.expr->kind == Expr::StrLit) {
+        for (unsigned char ch : s.expr->text)
+          rtCall(loc, "gaz_print_char", {}, {constInt(loc, b.getI8Type(), ch)});
+        return;
+      }
       Val x = genExpr(*s.expr);
       switch (x.t) {
       case Type::Integer: rtCall(loc, "gaz_print_int", {}, {x.v}); break;
@@ -486,7 +502,13 @@ private:
       case Type::Integer: r = rtCall(loc, "gaz_read_int", {b.getI32Type()}, {}); break;
       case Type::Real: r = rtCall(loc, "gaz_read_real", {b.getF32Type()}, {}); break;
       case Type::Character: r = rtCall(loc, "gaz_read_char", {b.getI8Type()}, {}); break;
-      default: throw err("TypeError", s.line, "cannot read into a boolean");
+      case Type::Boolean:
+        r = mlir::arith::CmpIOp::create(
+            b, loc, mlir::arith::CmpIPredicate::ne,
+            rtCall(loc, "gaz_read_bool", {b.getI32Type()}, {}),
+            constInt(loc, b.getI32Type(), 0));
+        break;
+      default: throw err("TypeError", s.line, "cannot read into this type");
       }
       mlir::memref::StoreOp::create(b, loc, r, v->mem);
       return;
@@ -518,6 +540,7 @@ private:
       return;
     }
     case Stmt::Loop: {
+      if (s.loopKind == Stmt::Range) { genRangeLoop(s); return; }
       Block *bodyB = newBlock(), *exitB = newBlock();
       Block *condB = s.loopKind == Stmt::Forever ? nullptr : newBlock();
       // `continue` re-tests the condition, or restarts an unconditional loop.
@@ -566,6 +589,51 @@ private:
       }
     }
     return false;
+  }
+
+  // `loop i in lo..hi stmt`: bounds are evaluated once; `i` is a fresh const
+  // each iteration, so the body cannot disturb the iteration.
+  void genRangeLoop(const Stmt &s) {
+    Location loc = b.getUnknownLoc();
+    Val lo = genExpr(*s.expr), hi = genExpr(*s.hi);
+    if (lo.t != Type::Integer || hi.t != Type::Integer)
+      throw err("TypeError", s.line, "range bounds must be integers");
+    Value cur = newSlot(loc, Type::Integer), end = newSlot(loc, Type::Integer);
+    mlir::memref::StoreOp::create(b, loc, lo.v, cur);
+    mlir::memref::StoreOp::create(b, loc, hi.v, end);
+    Block *condB = newBlock(), *bodyB = newBlock(), *stepB = newBlock(),
+          *addB = newBlock(), *exitB = newBlock();
+    mlir::cf::BranchOp::create(b, loc, condB);
+
+    b.setInsertionPointToStart(condB);
+    Value c = mlir::arith::CmpIOp::create(
+        b, loc, mlir::arith::CmpIPredicate::sle,
+        mlir::memref::LoadOp::create(b, loc, cur), mlir::memref::LoadOp::create(b, loc, end));
+    mlir::cf::CondBranchOp::create(b, loc, c, bodyB, exitB);
+
+    // Stop before incrementing past `hi` so INT_MAX bounds cannot wrap.
+    b.setInsertionPointToStart(stepB);
+    Value last = mlir::arith::CmpIOp::create(
+        b, loc, mlir::arith::CmpIPredicate::eq,
+        mlir::memref::LoadOp::create(b, loc, cur), mlir::memref::LoadOp::create(b, loc, end));
+    mlir::cf::CondBranchOp::create(b, loc, last, exitB, addB);
+    b.setInsertionPointToStart(addB);
+    Value next = mlir::arith::AddIOp::create(b, loc, mlir::memref::LoadOp::create(b, loc, cur),
+                                             constInt(loc, b.getI32Type(), 1));
+    mlir::memref::StoreOp::create(b, loc, next, cur);
+    mlir::cf::BranchOp::create(b, loc, condB);
+
+    b.setInsertionPointToStart(bodyB);
+    scopes.emplace_back();
+    Value iv = newSlot(loc, Type::Integer);
+    mlir::memref::StoreOp::create(b, loc, mlir::memref::LoadOp::create(b, loc, cur), iv);
+    scopes.back()[s.name] = {iv, Type::Integer, true};
+    loops.push_back({stepB, exitB});
+    genBlock(s.body);
+    branchIfOpen(stepB);
+    loops.pop_back();
+    scopes.pop_back();
+    b.setInsertionPointToStart(exitB);
   }
 
   void genFunc(const Func &f) {

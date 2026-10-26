@@ -1,5 +1,16 @@
 grammar Gazprea;
 
+@lexer::members {
+  // A leading-dot real like `.5` may not directly follow an identifier or ')'
+  // (that dot is tuple access, as in `t.1`).
+  bool dotRealOk() {
+    size_t c = _input->LA(-1);
+    bool word = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                (c >= '0' && c <= '9') || c == '_' || c == ')';
+    return !word;
+  }
+}
+
 program : func* EOF ;
 
 func
@@ -17,6 +28,7 @@ stmt
   | type ID ('=' expr)? ';'                            # TypedDecl
   | IF '(' expr ')' thenS=stmt (ELSE elseS=stmt)?      # IfStmt
   | LOOP WHILE '(' expr ')' stmt                       # WhileLoop
+  | LOOP ID IN expr '..' expr stmt                     # RangeLoop
   | LOOP stmt (WHILE '(' expr ')' ';')?                # Loop
   | BREAK ';'                                          # BreakStmt
   | CONTINUE ';'                                       # ContinueStmt
@@ -43,6 +55,8 @@ expr
   | INT_LIT                                            # IntLit
   | REAL_LIT                                           # RealLit
   | CHAR_LIT                                           # CharLit
+  | STRING_LIT                                         # StringLit
+  | STREAM_STATE '(' STD_INPUT ')'                     # StreamStateExpr
   | (TRUE | FALSE)                                     # BoolLit
   | ID                                                 # VarRef
   ;
@@ -71,18 +85,22 @@ KW_INTEGER   : 'integer' ;
 KW_REAL      : 'real' ;
 KW_BOOLEAN   : 'boolean' ;
 KW_CHARACTER : 'character' ;
+IN         : 'in' ;
+STREAM_STATE : 'stream_state' ;
 STD_INPUT  : 'std_input' ;
 STD_OUTPUT : 'std_output' ;
 
 ID : [a-zA-Z_] [a-zA-Z_0-9]* ;
 
 REAL_LIT
-  : DIGIT+ '.' DIGIT+ EXP?
-  | '.' DIGIT+ EXP?
+  : DIGIT+ '.' {_input->LA(1) != '.'}? DIGIT* EXP?
+  | {dotRealOk()}? '.' DIGIT+ EXP?
   | DIGIT+ EXP
   ;
 INT_LIT : DIGIT+ ;
-CHAR_LIT : '\'' ( ~['\\\r\n] | '\\' [ntr0\\'"] ) '\'' ;
+// Escapes are validated when the AST is built (bad ones are a LiteralError).
+CHAR_LIT   : '\'' ( ~['\\\r\n] | '\\' ~[\r\n] ~['\r\n]* ) '\'' ;
+STRING_LIT : '"' ( ~["\\\r\n] | '\\' ~[\r\n] )* '"' ;
 
 fragment DIGIT : [0-9] ;
 fragment EXP   : [eE] [+-]? DIGIT+ ;

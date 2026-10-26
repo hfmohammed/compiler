@@ -13,7 +13,8 @@ using ExprP = std::unique_ptr<Expr>;
 using StmtP = std::unique_ptr<Stmt>;
 
 struct Expr {
-  enum Kind { IntLit, RealLit, BoolLit, CharLit, Var, Unary, Binary, Call, Cast } kind;
+  enum Kind { IntLit, RealLit, BoolLit, CharLit, StrLit, StreamState, Var, Unary,
+              Binary, Call, Cast } kind;
   int line = 0;
   // literals / identifiers / operators (as spelled in source)
   std::string text;
@@ -31,11 +32,12 @@ struct Stmt {
   bool isConst = false;
   bool hasType = true;    // `var x = 1;` infers the type
   ExprP expr;             // init / rhs / condition / return value / output value
+  ExprP hi;               // Range loop: upper bound (expr is the lower bound)
   std::vector<ExprP> args; // CallS arguments
   std::vector<StmtP> body; // Block statements, or loop/if "then" body
   std::vector<StmtP> elseBody;
   // Loop shape: infinite, `while (c)`, or post-test `... while (c);`
-  enum LoopKind { Forever, PreTest, PostTest } loopKind = Forever;
+  enum LoopKind { Forever, PreTest, PostTest, Range } loopKind = Forever;
 };
 
 struct Param {

@@ -1,4 +1,4 @@
 procedure main() returns integer {
-  var boolean b; b <- std_input;
+  loop i in 1..3 { i = 5; }
   return 0;
 }

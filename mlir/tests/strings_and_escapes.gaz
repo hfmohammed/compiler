@@ -1,0 +1,11 @@
+procedure main() returns integer {
+  "hello" -> std_output; "" -> std_output; "\n" -> std_output;
+  "tab\there\n" -> std_output;
+  "q\"q \\ \'" -> std_output; "\n" -> std_output;
+  "\x41\x62\n" -> std_output;
+  '\x41' -> std_output; '\n' -> std_output;
+  as<integer>('\xFF') -> std_output; '\n' -> std_output;
+  as<integer>('\a') -> std_output; ' ' -> std_output; as<integer>('\b') -> std_output; '\n' -> std_output;
+  "// not a comment /* nor this */" -> std_output; "\n" -> std_output;
+  return 0;
+}

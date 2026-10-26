@@ -1,6 +1,7 @@
 #include "GazpreaLexer.h"
 #include "GazpreaParser.h"
 #include "Parser.h"
+#include <cctype>
 #include <stdexcept>
 
 namespace gaz {
@@ -120,6 +121,15 @@ private:
       s->body = body(x->stmt());
       return s;
     }
+    if (auto *x = dynamic_cast<P::RangeLoopContext *>(c)) {
+      auto s = mk(Stmt::Loop, c);
+      s->loopKind = Stmt::Range;
+      s->name = x->ID()->getText();
+      s->expr = expr(x->expr(0));
+      s->hi = expr(x->expr(1));
+      s->body = body(x->stmt());
+      return s;
+    }
     if (auto *x = dynamic_cast<P::LoopContext *>(c)) {
       auto s = mk(Stmt::Loop, c);
       s->body = body(x->stmt());
@@ -173,16 +183,42 @@ private:
     return e;
   }
 
-  static std::string decodeChar(const std::string &lit) {
-    std::string body = lit.substr(1, lit.size() - 2);
-    if (body[0] != '\\') return body;
-    switch (body[1]) {
-    case 'n': return "\n";
-    case 't': return "\t";
-    case 'r': return "\r";
-    case '0': return std::string(1, '\0');
-    default: return std::string(1, body[1]); // \\ \' \"
+  // Decodes the escapes of a character or string literal body.
+  static std::string decode(const std::string &body, int line) {
+    auto bad = [&](const std::string &m) {
+      return std::runtime_error("LiteralError on line " + std::to_string(line) + ": " + m);
+    };
+    std::string out;
+    for (size_t i = 0; i < body.size(); i++) {
+      if (body[i] != '\\') { out += body[i]; continue; }
+      char c = body[++i];
+      switch (c) {
+      case '0': out += '\0'; break;
+      case 'a': out += '\a'; break;
+      case 'b': out += '\b'; break;
+      case 't': out += '\t'; break;
+      case 'n': out += '\n'; break;
+      case 'r': out += '\r'; break;
+      case '"': case '\'': case '\\': out += c; break;
+      case 'x': {
+        if (i + 2 >= body.size() || !isxdigit((unsigned char)body[i + 1]) ||
+            !isxdigit((unsigned char)body[i + 2]))
+          throw bad("malformed \\x escape");
+        out += (char)std::stoi(body.substr(i + 1, 2), nullptr, 16);
+        i += 2;
+        break;
+      }
+      default: throw bad(std::string("unknown escape sequence '\\") + c + "'");
+      }
     }
+    return out;
+  }
+  static std::string decodeChar(const std::string &lit, int line) {
+    std::string v = decode(lit.substr(1, lit.size() - 2), line);
+    if (v.size() != 1)
+      throw std::runtime_error("LiteralError on line " + std::to_string(line) +
+                               ": character literal must hold one character");
+    return v;
   }
 
   ExprP expr(P::ExprContext *c) {
@@ -212,7 +248,13 @@ private:
     if (auto *x = dynamic_cast<P::OrExprContext *>(c)) return binary(c, x->op->getText(), x->expr());
     if (dynamic_cast<P::IntLitContext *>(c)) return node(Expr::IntLit, c, c->getText());
     if (dynamic_cast<P::RealLitContext *>(c)) return node(Expr::RealLit, c, c->getText());
-    if (dynamic_cast<P::CharLitContext *>(c)) return node(Expr::CharLit, c, decodeChar(c->getText()));
+    if (dynamic_cast<P::CharLitContext *>(c))
+      return node(Expr::CharLit, c, decodeChar(c->getText(), lineOf(c)));
+    if (dynamic_cast<P::StringLitContext *>(c)) {
+      std::string t = c->getText();
+      return node(Expr::StrLit, c, decode(t.substr(1, t.size() - 2), lineOf(c)));
+    }
+    if (dynamic_cast<P::StreamStateExprContext *>(c)) return node(Expr::StreamState, c);
     if (dynamic_cast<P::BoolLitContext *>(c)) return node(Expr::BoolLit, c, c->getText());
     return node(Expr::Var, c, c->getText());
   }

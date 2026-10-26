@@ -1,4 +1,0 @@
-procedure main() returns integer {
-  var character c; c <- std_input; c -> std_output;
-  return 0;
-}

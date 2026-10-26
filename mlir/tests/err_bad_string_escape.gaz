@@ -1,0 +1,4 @@
+procedure main() returns integer {
+  "bad \q" -> std_output;
+  return 0;
+}
