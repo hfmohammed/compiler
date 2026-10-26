@@ -1,0 +1,6 @@
+procedure main() returns integer {
+  'o' -> std_output; 'k' -> std_output; '\n' -> std_output;
+  var integer m = 2147483647;
+  (m + 1) -> std_output;
+  return 0;
+}

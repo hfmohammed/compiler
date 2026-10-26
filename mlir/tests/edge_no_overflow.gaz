@@ -1,0 +1,9 @@
+procedure main() returns integer {
+  var integer m = 2147483647;
+  (m - 1 + 1) -> std_output; '\n' -> std_output;
+  var integer n = -2147483647 - 1;
+  (n + 1) -> std_output; '\n' -> std_output;
+  (46340 * 46340) -> std_output; '\n' -> std_output;
+  (2 ^ 30) -> std_output; '\n' -> std_output;
+  return 0;
+}

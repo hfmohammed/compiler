@@ -1,0 +1,5 @@
+procedure main() returns integer {
+  'o' -> std_output; 'k' -> std_output; '\n' -> std_output;
+  (2 ^ 31) -> std_output;
+  return 0;
+}

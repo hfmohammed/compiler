@@ -2,6 +2,7 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include <stdexcept>
 #include <unordered_map>
@@ -22,6 +23,7 @@ struct Var {
 struct FuncInfo {
   std::vector<Type> params;
   Type ret;
+  bool isProc = false;
 };
 
 class Gen {
@@ -36,16 +38,17 @@ public:
     for (auto &f : prog.funcs) {
       if (funcs.count(f.name))
         throw err("SymbolError", f.line, "redefinition of '" + f.name + "'");
-      FuncInfo fi{{}, f.ret};
+      FuncInfo fi{{}, f.ret, f.isProcedure};
       for (auto &p : f.params) fi.params.push_back(p.type);
       funcs[f.name] = fi;
     }
     auto it = funcs.find("main");
     if (it == funcs.end())
-      throw std::runtime_error("SymbolError: program has no 'main' procedure");
-    if (!it->second.params.empty() || it->second.ret != Type::Integer)
-      throw std::runtime_error(
-          "TypeError: 'main' must take no arguments and return integer");
+      throw err("MainError", 1, "program does not have a main procedure");
+    if (!it->second.isProc || !it->second.params.empty() ||
+        it->second.ret != Type::Integer)
+      throw err("MainError", 1,
+                "main must be a procedure with no arguments returning integer");
 
     for (auto &f : prog.funcs) genFunc(f);
     return std::move(module);
@@ -60,10 +63,12 @@ private:
   mlir::func::FuncOp curFn;
   Block *entry = nullptr;
   Type curRet = Type::Void;
+  bool curIsProc = true;
+  Block *trapBlock = nullptr; // shared MathError (overflow) exit of the current function
 
   std::runtime_error err(const char *kind, int line, const std::string &m) {
-    return std::runtime_error(std::string(kind) + " " + std::to_string(line) +
-                              ": " + m);
+    return std::runtime_error(std::string(kind) + " on line " +
+                              std::to_string(line) + ": " + m);
   }
 
   // ---- types ----
@@ -106,6 +111,8 @@ private:
     declareExt("gaz_imod", {i32, i32}, {i32});
     declareExt("gaz_ipow", {i32, i32}, {i32});
     declareExt("gaz_rpow", {f32, f32}, {f32});
+    declareExt("gaz_rmod", {f32, f32}, {f32});
+    declareExt("gaz_overflow", {}, {});
   }
   Value rtCall(Location loc, const char *name, std::vector<mlir::Type> res,
                std::vector<Value> args) {
@@ -190,13 +197,15 @@ private:
     Type t;
   };
 
-  Val genExpr(const Expr &e) {
+  // `procOk`: a procedure call is legal here (right-hand side of a declaration
+  // or assignment, possibly under unary operators and casts).
+  Val genExpr(const Expr &e, bool procOk = false) {
     Location loc = b.getUnknownLoc();
     switch (e.kind) {
     case Expr::IntLit: {
       long long v = std::stoll(e.text);
       if (v > 2147483647LL)
-        throw err("TypeError", e.line, "integer literal out of range");
+        throw err("LiteralError", e.line, "integer literal does not fit in 32 bits");
       return {constInt(loc, b.getI32Type(), v), Type::Integer};
     }
     case Expr::RealLit:
@@ -214,27 +223,39 @@ private:
       return {mlir::memref::LoadOp::create(b, loc, var->mem), var->type};
     }
     case Expr::Cast: {
-      Val x = genExpr(*e.args[0]);
+      Val x = genExpr(*e.args[0], procOk);
       return {cast(loc, e.line, x.v, x.t, e.castTo), e.castTo};
     }
-    case Expr::Unary: return genUnary(e);
+    case Expr::Unary: return genUnary(e, procOk);
     case Expr::Binary: return genBinary(e);
     case Expr::Call: {
-      Val r = genCall(e.text, e.args, e.line);
+      Val r = genCall(e.text, e.args, e.line, procOk ? CallPos::ExprProcOk : CallPos::Expr);
       if (r.t == Type::Void)
-        throw err("TypeError", e.line, "'" + e.text + "' returns no value");
+        throw err("CallError", e.line, "'" + e.text + "' returns no value");
       return r;
     }
     }
     throw err("TypeError", e.line, "unsupported expression");
   }
 
-  Val genCall(const std::string &name, const std::vector<ExprP> &args, int line) {
+  enum class CallPos { Stmt, Expr, ExprProcOk };
+
+  Val genCall(const std::string &name, const std::vector<ExprP> &args, int line,
+              CallPos pos) {
     Location loc = b.getUnknownLoc();
     auto it = funcs.find(name);
     if (it == funcs.end())
       throw err("SymbolError", line, "call to undefined function '" + name + "'");
     const FuncInfo &fi = it->second;
+    if (pos == CallPos::Stmt && !fi.isProc)
+      throw err("CallError", line, "'call' applied to function '" + name + "'");
+    if (fi.isProc) {
+      if (!curIsProc)
+        throw err("CallError", line, "function cannot call procedure '" + name + "'");
+      if (pos == CallPos::Expr)
+        throw err("CallError", line,
+                  "call to procedure '" + name + "' is not allowed in this position");
+    }
     if (fi.params.size() != args.size())
       throw err("TypeError", line, "wrong number of arguments to '" + name + "'");
     std::vector<Value> vals;
@@ -248,9 +269,34 @@ private:
     return {res.empty() ? Value() : c.getResult(0), fi.ret};
   }
 
-  Val genUnary(const Expr &e) {
+  // 32-bit signed arithmetic that raises MathError on overflow: compute in i64
+  // and branch to a shared trap block if the result does not fit.
+  Value checkedInt(Location loc, const std::string &op, Value l, Value r) {
+    auto i64 = b.getI64Type();
+    Value wl = mlir::arith::ExtSIOp::create(b, loc, i64, l);
+    Value wr = mlir::arith::ExtSIOp::create(b, loc, i64, r);
+    Value w = op == "+"   ? mlir::arith::AddIOp::create(b, loc, wl, wr).getResult()
+              : op == "-" ? mlir::arith::SubIOp::create(b, loc, wl, wr).getResult()
+                          : mlir::arith::MulIOp::create(b, loc, wl, wr).getResult();
+    Value n = mlir::arith::TruncIOp::create(b, loc, b.getI32Type(), w);
+    Value back = mlir::arith::ExtSIOp::create(b, loc, i64, n);
+    Value ok = mlir::arith::CmpIOp::create(b, loc, mlir::arith::CmpIPredicate::eq, back, w);
+    if (!trapBlock) {
+      trapBlock = newBlock();
+      mlir::OpBuilder::InsertionGuard g(b);
+      b.setInsertionPointToStart(trapBlock);
+      rtCall(loc, "gaz_overflow", {}, {});
+      mlir::LLVM::UnreachableOp::create(b, loc);
+    }
+    Block *cont = newBlock();
+    mlir::cf::CondBranchOp::create(b, loc, ok, cont, trapBlock);
+    b.setInsertionPointToStart(cont);
+    return n;
+  }
+
+  Val genUnary(const Expr &e, bool procOk) {
     Location loc = b.getUnknownLoc();
-    Val x = genExpr(*e.args[0]);
+    Val x = genExpr(*e.args[0], procOk);
     if (e.text == "not") {
       if (x.t != Type::Boolean) throw err("TypeError", e.line, "'not' needs a boolean");
       return {mlir::arith::XOrIOp::create(b, loc, x.v, constInt(loc, b.getI1Type(), 1)),
@@ -261,8 +307,7 @@ private:
     if (e.text == "+") return x;
     if (x.t == Type::Real)
       return {mlir::arith::NegFOp::create(b, loc, x.v), Type::Real};
-    return {mlir::arith::SubIOp::create(b, loc, constInt(loc, b.getI32Type(), 0), x.v),
-            Type::Integer};
+    return {checkedInt(loc, "-", constInt(loc, b.getI32Type(), 0), x.v), Type::Integer};
   }
 
   Val genBinary(const Expr &e) {
@@ -323,18 +368,18 @@ private:
     auto f32 = b.getF32Type();
     if (op == "+")
       return {real ? mlir::arith::AddFOp::create(b, loc, l.v, r.v).getResult()
-                   : mlir::arith::AddIOp::create(b, loc, l.v, r.v).getResult(), rt};
+                   : checkedInt(loc, op, l.v, r.v), rt};
     if (op == "-")
       return {real ? mlir::arith::SubFOp::create(b, loc, l.v, r.v).getResult()
-                   : mlir::arith::SubIOp::create(b, loc, l.v, r.v).getResult(), rt};
+                   : checkedInt(loc, op, l.v, r.v), rt};
     if (op == "*")
       return {real ? mlir::arith::MulFOp::create(b, loc, l.v, r.v).getResult()
-                   : mlir::arith::MulIOp::create(b, loc, l.v, r.v).getResult(), rt};
+                   : checkedInt(loc, op, l.v, r.v), rt};
     if (op == "/")
       return {real ? mlir::arith::DivFOp::create(b, loc, l.v, r.v).getResult()
                    : rtCall(loc, "gaz_idiv", {i32}, {l.v, r.v}), rt};
     if (op == "%") {
-      if (real) throw err("TypeError", e.line, "'%' needs integer operands");
+      if (real) return {rtCall(loc, "gaz_rmod", {f32}, {l.v, r.v}), rt};
       return {rtCall(loc, "gaz_imod", {i32}, {l.v, r.v}), rt};
     }
     if (op == "^")
@@ -392,7 +437,7 @@ private:
       Type t = s.declType;
       Value init;
       if (s.expr) {
-        Val x = genExpr(*s.expr);
+        Val x = genExpr(*s.expr, true);
         if (!s.hasType) t = x.t;
         init = coerce(loc, s.line, x.v, x.t, t, "declaration");
       } else {
@@ -410,13 +455,14 @@ private:
     case Stmt::Assign: {
       Var *v = lookup(s.name);
       if (!v) throw err("SymbolError", s.line, "undefined variable '" + s.name + "'");
-      if (v->isConst) throw err("TypeError", s.line, "assignment to const '" + s.name + "'");
-      Val x = genExpr(*s.expr);
+      if (v->isConst) throw err("AssignError", s.line, "assignment to const '" + s.name + "'");
+      Val x = genExpr(*s.expr, true);
       mlir::memref::StoreOp::create(
           b, loc, coerce(loc, s.line, x.v, x.t, v->type, "assignment"), v->mem);
       return;
     }
     case Stmt::Output: {
+      if (!curIsProc) throw err("StatementError", s.line, "I/O is not allowed in a function");
       Val x = genExpr(*s.expr);
       switch (x.t) {
       case Type::Integer: rtCall(loc, "gaz_print_int", {}, {x.v}); break;
@@ -431,9 +477,10 @@ private:
       return;
     }
     case Stmt::Input: {
+      if (!curIsProc) throw err("StatementError", s.line, "I/O is not allowed in a function");
       Var *v = lookup(s.name);
       if (!v) throw err("SymbolError", s.line, "undefined variable '" + s.name + "'");
-      if (v->isConst) throw err("TypeError", s.line, "input into const '" + s.name + "'");
+      if (v->isConst) throw err("AssignError", s.line, "input into const '" + s.name + "'");
       Value r;
       switch (v->type) {
       case Type::Integer: r = rtCall(loc, "gaz_read_int", {b.getI32Type()}, {}); break;
@@ -444,7 +491,7 @@ private:
       mlir::memref::StoreOp::create(b, loc, r, v->mem);
       return;
     }
-    case Stmt::CallS: genCall(s.name, s.args, s.line); return;
+    case Stmt::CallS: genCall(s.name, s.args, s.line, CallPos::Stmt); return;
     case Stmt::Return: {
       if (curRet == Type::Void) {
         if (s.expr) throw err("TypeError", s.line, "returning a value from a void procedure");
@@ -492,7 +539,7 @@ private:
     case Stmt::Break:
     case Stmt::Continue: {
       if (loops.empty())
-        throw err("SyntaxError", s.line,
+        throw err("StatementError", s.line,
                   s.kind == Stmt::Break ? "'break' outside of a loop"
                                         : "'continue' outside of a loop");
       mlir::cf::BranchOp::create(
@@ -502,8 +549,32 @@ private:
     }
   }
 
+  // True if every control path through `stmts` reaches a return. Loops never
+  // count: the spec treats the end of a loop as reachable.
+  static bool alwaysReturns(const std::vector<StmtP> &stmts) {
+    for (auto &s : stmts) {
+      switch (s->kind) {
+      case Stmt::Return: return true;
+      case Stmt::Block:
+        if (alwaysReturns(s->body)) return true;
+        break;
+      case Stmt::If:
+        if (!s->elseBody.empty() && alwaysReturns(s->body) && alwaysReturns(s->elseBody))
+          return true;
+        break;
+      default: break;
+      }
+    }
+    return false;
+  }
+
   void genFunc(const Func &f) {
     Location loc = b.getUnknownLoc();
+    curIsProc = f.isProcedure;
+    trapBlock = nullptr;
+    if (f.ret != Type::Void && !f.exprBody && !alwaysReturns(f.body))
+      throw err("ReturnError", f.line,
+                "'" + f.name + "' does not return on every control path");
     std::vector<mlir::Type> in, out;
     for (auto &p : f.params) in.push_back(mlirType(p.type));
     if (f.ret != Type::Void) out.push_back(mlirType(f.ret));

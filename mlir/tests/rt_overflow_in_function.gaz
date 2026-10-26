@@ -1,0 +1,6 @@
+function f(integer x) returns integer = x + x;
+procedure main() returns integer {
+  'o' -> std_output; 'k' -> std_output; '\n' -> std_output;
+  f(2147483647) -> std_output;
+  return 0;
+}

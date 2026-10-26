@@ -13,8 +13,8 @@ public:
   void syntaxError(antlr4::Recognizer *, antlr4::Token *, size_t line,
                    size_t col, const std::string &msg,
                    std::exception_ptr) override {
-    throw std::runtime_error("SyntaxError " + std::to_string(line) + ":" +
-                             std::to_string(col) + ": " + msg);
+    throw std::runtime_error("SyntaxError on line " + std::to_string(line) +
+                             ": " + msg);
   }
 };
 
@@ -45,7 +45,15 @@ private:
     f.line = lineOf(c);
     f.isProcedure = c->kind->getType() == P::PROCEDURE;
     f.name = c->name->getText();
-    for (auto *p : c->param()) f.params.push_back({type(p->type()), p->ID()->getText()});
+    if (c->expr() && f.isProcedure)
+      throw std::runtime_error("SyntaxError on line " + std::to_string(f.line) +
+                               ": procedures cannot have an expression body");
+    for (auto *p : c->param()) {
+      if (!f.isProcedure && p->CONST())
+        throw std::runtime_error("SyntaxError on line " + std::to_string(f.line) +
+                                 ": function parameters cannot have qualifiers");
+      f.params.push_back({type(p->type()), p->ID()->getText()});
+    }
     if (c->type()) f.ret = type(c->type());
     if (c->expr()) f.exprBody = expr(c->expr());
     else f.body = stmts(c->stmt());
@@ -83,7 +91,7 @@ private:
     s->name = id->getText();
     if (init) s->expr = expr(init);
     else if (!t)
-      throw std::runtime_error("SyntaxError " + std::to_string(s->line) +
+      throw std::runtime_error("SyntaxError on line " + std::to_string(s->line) +
                                ": cannot infer a type without an initializer");
     return s;
   }
@@ -97,7 +105,7 @@ private:
     if (auto *x = dynamic_cast<P::QualDeclContext *>(c))
       return decl(c, x->type(), x->ID(), x->expr(), x->qual->getType() == P::CONST);
     if (auto *x = dynamic_cast<P::TypedDeclContext *>(c))
-      return decl(c, x->type(), x->ID(), x->expr(), false);
+      return decl(c, x->type(), x->ID(), x->expr(), true); // no qualifier means const
     if (auto *x = dynamic_cast<P::IfStmtContext *>(c)) {
       auto s = mk(Stmt::If, c);
       s->expr = expr(x->expr());

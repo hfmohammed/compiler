@@ -1,0 +1,5 @@
+function f() returns integer { var integer x; x <- std_input; return x; }
+procedure main() returns integer {
+  var integer u = f();
+  return 0;
+}

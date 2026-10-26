@@ -20,5 +20,7 @@ procedure main() returns integer {
   0.1 -> std_output;
   '\n' -> std_output;
 
+  (5.5 % 2.0) -> std_output; '\n' -> std_output;
+  (-5.5 % 2.0) -> std_output; '\n' -> std_output;
   return 0;
 }

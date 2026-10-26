@@ -1,4 +1,5 @@
+function f() returns integer = 1;
 procedure main() returns integer {
-  var real r = 1.5 % 2.0;
+  call f();
   return 0;
 }

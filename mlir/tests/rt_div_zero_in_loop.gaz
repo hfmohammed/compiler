@@ -1,5 +1,4 @@
 procedure main() returns integer {
-  'b' -> std_output; 'e' -> std_output; 'f' -> std_output; 'o' -> std_output; 'r' -> std_output; 'e' -> std_output; '\n' -> std_output;
   var integer i = 3;
   loop { (10 / i) -> std_output; i = i - 1; }
   return 0;

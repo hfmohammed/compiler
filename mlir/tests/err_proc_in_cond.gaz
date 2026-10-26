@@ -1,0 +1,5 @@
+procedure p() returns boolean { return true; }
+procedure main() returns integer {
+  if (p()) { }
+  return 0;
+}

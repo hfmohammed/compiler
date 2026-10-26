@@ -1,0 +1,7 @@
+function f(integer x) returns integer {
+  if (x > 0) { return 1; } else { x = 2; }
+}
+procedure main() returns integer {
+
+  return 0;
+}

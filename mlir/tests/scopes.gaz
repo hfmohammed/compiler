@@ -6,7 +6,8 @@ procedure main() returns integer {
   var x = 1;
   {
     var integer x = 10;
-    bump(x) -> std_output;
+    var integer r = bump(x);
+    r -> std_output;
     '\n' -> std_output;
   }
   loop while (x < 4) { x = bump(x); }

@@ -8,7 +8,7 @@ procedure main() returns integer {
   c -> std_output; '\n' -> std_output;
   as<integer>(d) -> std_output; '\n' -> std_output;
   const integer k = 5;
-  integer m = k * 2;
+  var integer m = k * 2;
   const n = m + 1;
   var q = 2.5;
   var z = true;

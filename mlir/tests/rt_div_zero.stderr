@@ -1,1 +1,1 @@
-RuntimeError: integer division by zero
+MathError:

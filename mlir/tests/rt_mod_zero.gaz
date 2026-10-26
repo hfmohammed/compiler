@@ -1,5 +1,5 @@
 procedure main() returns integer {
-  'b' -> std_output; 'e' -> std_output; 'f' -> std_output; 'o' -> std_output; 'r' -> std_output; 'e' -> std_output; '\n' -> std_output;
+  'o' -> std_output; 'k' -> std_output; '\n' -> std_output;
   var integer z = 0;
   (5 % z) -> std_output;
   return 0;

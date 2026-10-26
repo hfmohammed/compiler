@@ -1,0 +1,6 @@
+procedure p() returns integer { return 1; }
+function f() returns integer { var integer x = p(); return x; }
+procedure main() returns integer {
+  var integer u = f();
+  return 0;
+}

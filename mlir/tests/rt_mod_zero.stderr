@@ -1,1 +1,1 @@
-RuntimeError: integer modulo by zero
+MathError:

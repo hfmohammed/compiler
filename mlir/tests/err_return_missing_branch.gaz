@@ -1,0 +1,7 @@
+function f(boolean b) returns integer {
+  if (b) { return 3; }
+}
+procedure main() returns integer {
+
+  return 0;
+}
