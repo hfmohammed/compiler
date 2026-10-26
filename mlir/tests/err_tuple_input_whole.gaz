@@ -1,0 +1,5 @@
+procedure main() returns integer {
+  var t = (1, 2);
+  t <- std_input;
+  return 0;
+}

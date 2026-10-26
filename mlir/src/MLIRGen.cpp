@@ -14,16 +14,28 @@ using mlir::Block;
 using mlir::Location;
 using mlir::Value;
 
+// Tuples are flattened: a value of tuple type is the list of its scalar leaves
+// (depth first), and a tuple variable owns one stack slot per leaf. Function
+// parameters and results are flattened the same way.
+struct Val {
+  Value v;               // scalar value
+  Type t;
+  std::vector<Value> fs; // tuple leaves
+};
+
 struct Var {
-  Value mem; // rank-0 memref holding the value
+  std::vector<Value> mems; // one rank-0 memref per leaf
   Type type;
   bool isConst;
 };
 
 struct FuncInfo {
   std::vector<Type> params;
+  std::vector<bool> isVar;
   Type ret;
   bool isProc = false;
+  bool defined = false;
+  int line = 0;
 };
 
 class Gen {
@@ -35,13 +47,11 @@ public:
     b.setInsertionPointToEnd(module->getBody());
     declareRuntime();
 
-    for (auto &f : prog.funcs) {
-      if (funcs.count(f.name))
-        throw err("SymbolError", f.line, "redefinition of '" + f.name + "'");
-      FuncInfo fi{{}, f.ret, f.isProcedure};
-      for (auto &p : f.params) fi.params.push_back(p.type);
-      funcs[f.name] = fi;
-    }
+    for (auto &f : prog.funcs) declare(f);
+    for (auto &[name, fi] : funcs)
+      if (!fi.defined)
+        throw err("DefinitionError", fi.line, "'" + name + "' is declared but never defined");
+
     auto it = funcs.find("main");
     if (it == funcs.end())
       throw err("MainError", 1, "program does not have a main procedure");
@@ -50,7 +60,8 @@ public:
       throw err("MainError", 1,
                 "main must be a procedure with no arguments returning integer");
 
-    for (auto &f : prog.funcs) genFunc(f);
+    for (auto &f : prog.funcs)
+      if (!f.isProto) genFunc(f);
     return std::move(module);
   }
 
@@ -71,9 +82,37 @@ private:
                               std::to_string(line) + ": " + m);
   }
 
+  // ---- function table ----
+  void declare(const Func &f) {
+    FuncInfo fi;
+    fi.ret = f.ret;
+    fi.isProc = f.isProcedure;
+    fi.line = f.line;
+    for (auto &p : f.params) {
+      fi.params.push_back(p.type);
+      fi.isVar.push_back(p.isVar);
+    }
+    auto it = funcs.find(f.name);
+    if (it == funcs.end()) {
+      fi.defined = !f.isProto;
+      funcs[f.name] = fi;
+      return;
+    }
+    FuncInfo &old = it->second;
+    if (old.params != fi.params || old.isVar != fi.isVar || old.ret != fi.ret ||
+        old.isProc != fi.isProc)
+      throw err("TypeError", f.line,
+                "'" + f.name + "' does not match its earlier declaration");
+    if (!f.isProto) {
+      if (old.defined) throw err("SymbolError", f.line, "redefinition of '" + f.name + "'");
+      old.defined = true;
+    }
+    // a repeated prototype is harmless
+  }
+
   // ---- types ----
-  mlir::Type mlirType(Type t) {
-    switch (t) {
+  mlir::Type mlirScalar(Type t) {
+    switch (t.kind) {
     case Type::Integer: return b.getI32Type();
     case Type::Real: return b.getF32Type();
     case Type::Boolean: return b.getI1Type();
@@ -81,14 +120,68 @@ private:
     default: return mlir::Type();
     }
   }
-  static const char *typeName(Type t) {
-    switch (t) {
+  static void leafTypes(const Type &t, std::vector<Type> &out) {
+    if (t.isTuple()) for (auto &e : t.elems) leafTypes(e, out);
+    else if (t.kind != Type::Void) out.push_back(t);
+  }
+  static std::vector<Type> leavesOf(const Type &t) {
+    std::vector<Type> v;
+    leafTypes(t, v);
+    return v;
+  }
+  static size_t leafCount(const Type &t) { return leavesOf(t).size(); }
+  static std::string typeName(const Type &t) {
+    switch (t.kind) {
     case Type::Integer: return "integer";
     case Type::Real: return "real";
     case Type::Boolean: return "boolean";
     case Type::Character: return "character";
+    case Type::Tuple: {
+      std::string s = "tuple(";
+      for (size_t i = 0; i < t.elems.size(); i++) s += (i ? ", " : "") + typeName(t.elems[i]);
+      return s + ")";
+    }
     default: return "void";
     }
+  }
+  // flattened mlir types of a value / of a by-reference parameter
+  std::vector<mlir::Type> valueTypes(const Type &t) {
+    std::vector<mlir::Type> v;
+    for (auto &l : leavesOf(t)) v.push_back(mlirScalar(l));
+    return v;
+  }
+  std::vector<mlir::Type> refTypes(const Type &t) {
+    std::vector<mlir::Type> v;
+    for (auto &l : leavesOf(t)) v.push_back(mlir::MemRefType::get({}, mlirScalar(l)));
+    return v;
+  }
+
+  // ---- values ----
+  static std::vector<Value> leaves(const Val &x) {
+    if (x.t.isTuple()) return x.fs;
+    if (x.t.kind == Type::Void) return {};
+    return {x.v};
+  }
+  static Val fromLeaves(const Type &t, const std::vector<Value> &ls) {
+    Val x;
+    x.t = t;
+    if (t.isTuple()) x.fs = ls;
+    else if (!ls.empty()) x.v = ls[0];
+    return x;
+  }
+  static Val scalar(Value v, Type t) {
+    Val x;
+    x.v = v;
+    x.t = t;
+    return x;
+  }
+  // Member `i` of a tuple value.
+  static Val elem(const Val &tv, size_t i) {
+    size_t off = 0;
+    for (size_t k = 0; k < i; k++) off += leafCount(tv.t.elems[k]);
+    size_t n = leafCount(tv.t.elems[i]);
+    return fromLeaves(tv.t.elems[i],
+                      std::vector<Value>(tv.fs.begin() + off, tv.fs.begin() + off + n));
   }
 
   // ---- runtime declarations ----
@@ -126,58 +219,81 @@ private:
   Value constInt(Location loc, mlir::Type t, int64_t v) {
     return mlir::arith::ConstantOp::create(b, loc, b.getIntegerAttr(t, v));
   }
+  Value zeroLeaf(Location loc, Type t) {
+    if (t.kind == Type::Real)
+      return mlir::arith::ConstantOp::create(b, loc, b.getF32FloatAttr(0));
+    return constInt(loc, mlirScalar(t), 0);
+  }
+  Val zeroVal(Location loc, const Type &t) {
+    std::vector<Value> ls;
+    for (auto &l : leavesOf(t)) ls.push_back(zeroLeaf(loc, l));
+    return fromLeaves(t, ls);
+  }
 
-  // Implicit conversion (integer -> real only).
-  Value coerce(Location loc, int line, Value v, Type from, Type to,
-               const char *what) {
-    if (from == to) return v;
-    if (from == Type::Integer && to == Type::Real)
-      return mlir::arith::SIToFPOp::create(b, loc, b.getF32Type(), v);
+  // Implicit conversion: integer -> real, applied member-wise to tuples.
+  Val coerce(Location loc, int line, const Val &x, const Type &to, const char *what) {
+    if (x.t == to) return x;
+    if (x.t.isTuple() && to.isTuple() && x.t.elems.size() == to.elems.size()) {
+      std::vector<Value> ls;
+      for (size_t i = 0; i < to.elems.size(); i++) {
+        auto part = leaves(coerce(loc, line, elem(x, i), to.elems[i], what));
+        ls.insert(ls.end(), part.begin(), part.end());
+      }
+      return fromLeaves(to, ls);
+    }
+    if (x.t == Type::Integer && to == Type::Real)
+      return scalar(mlir::arith::SIToFPOp::create(b, loc, b.getF32Type(), x.v), Type::Real);
     throw err("TypeError", line,
-              std::string("cannot convert ") + typeName(from) + " to " +
-                  typeName(to) + " in " + what);
+              "cannot convert " + typeName(x.t) + " to " + typeName(to) + " in " + what);
   }
 
   // Explicit `as<T>(e)`.
-  Value cast(Location loc, int line, Value v, Type from, Type to) {
-    if (from == to) return v;
+  Val cast(Location loc, int line, const Val &x, const Type &to) {
+    if (x.t == to) return x;
+    if (x.t.isTuple() && to.isTuple() && x.t.elems.size() == to.elems.size()) {
+      std::vector<Value> ls;
+      for (size_t i = 0; i < to.elems.size(); i++) {
+        auto part = leaves(cast(loc, line, elem(x, i), to.elems[i]));
+        ls.insert(ls.end(), part.begin(), part.end());
+      }
+      return fromLeaves(to, ls);
+    }
+    Value v = x.v;
     auto i32 = b.getI32Type();
-    switch (from) {
+    using P = mlir::arith::CmpIPredicate;
+    switch (x.t.kind) {
     case Type::Boolean:
-      if (to == Type::Integer) return mlir::arith::ExtUIOp::create(b, loc, i32, v);
+      if (to == Type::Integer) return scalar(mlir::arith::ExtUIOp::create(b, loc, i32, v), to);
       if (to == Type::Character)
-        return mlir::arith::ExtUIOp::create(b, loc, b.getI8Type(), v);
+        return scalar(mlir::arith::ExtUIOp::create(b, loc, b.getI8Type(), v), to);
       if (to == Type::Real)
-        return mlir::arith::UIToFPOp::create(b, loc, b.getF32Type(), v);
+        return scalar(mlir::arith::UIToFPOp::create(b, loc, b.getF32Type(), v), to);
       break;
     case Type::Character:
-      if (to == Type::Integer) return mlir::arith::ExtUIOp::create(b, loc, i32, v);
+      if (to == Type::Integer) return scalar(mlir::arith::ExtUIOp::create(b, loc, i32, v), to);
       if (to == Type::Boolean)
-        return mlir::arith::CmpIOp::create(b, loc, mlir::arith::CmpIPredicate::ne,
-                                           v, constInt(loc, b.getI8Type(), 0));
+        return scalar(mlir::arith::CmpIOp::create(b, loc, P::ne, v, constInt(loc, b.getI8Type(), 0)), to);
       if (to == Type::Real)
-        return mlir::arith::UIToFPOp::create(b, loc, b.getF32Type(), v);
+        return scalar(mlir::arith::UIToFPOp::create(b, loc, b.getF32Type(), v), to);
       break;
     case Type::Integer:
       if (to == Type::Real)
-        return mlir::arith::SIToFPOp::create(b, loc, b.getF32Type(), v);
+        return scalar(mlir::arith::SIToFPOp::create(b, loc, b.getF32Type(), v), to);
       if (to == Type::Boolean)
-        return mlir::arith::CmpIOp::create(b, loc, mlir::arith::CmpIPredicate::ne,
-                                           v, constInt(loc, i32, 0));
+        return scalar(mlir::arith::CmpIOp::create(b, loc, P::ne, v, constInt(loc, i32, 0)), to);
       if (to == Type::Character)
-        return mlir::arith::TruncIOp::create(b, loc, b.getI8Type(), v);
+        return scalar(mlir::arith::TruncIOp::create(b, loc, b.getI8Type(), v), to);
       break;
     case Type::Real:
       if (to == Type::Integer)
-        return mlir::arith::FPToSIOp::create(b, loc, i32, v);
+        return scalar(mlir::arith::FPToSIOp::create(b, loc, i32, v), to);
       break;
     default: break;
     }
-    throw err("TypeError", line,
-              std::string("cannot cast ") + typeName(from) + " to " + typeName(to));
+    throw err("TypeError", line, "cannot cast " + typeName(x.t) + " to " + typeName(to));
   }
 
-  // ---- scopes ----
+  // ---- scopes & storage ----
   Var *lookup(const std::string &n) {
     for (auto it = scopes.rbegin(); it != scopes.rend(); ++it) {
       auto f = it->find(n);
@@ -185,20 +301,55 @@ private:
     }
     return nullptr;
   }
+  Var &need(const std::string &n, int line) {
+    Var *v = lookup(n);
+    if (!v) throw err("SymbolError", line, "undefined variable '" + n + "'");
+    return *v;
+  }
   // Stack slots live in the entry block so loops don't grow the stack.
   Value newSlot(Location loc, Type t) {
     mlir::OpBuilder::InsertionGuard g(b);
     b.setInsertionPointToStart(entry);
     return mlir::memref::AllocaOp::create(b, loc,
-                                          mlir::MemRefType::get({}, mlirType(t)));
+                                          mlir::MemRefType::get({}, mlirScalar(t)));
+  }
+  std::vector<Value> newSlots(Location loc, const Type &t) {
+    std::vector<Value> m;
+    for (auto &l : leavesOf(t)) m.push_back(newSlot(loc, l));
+    return m;
+  }
+  void store(Location loc, const std::vector<Value> &mems, const Val &x) {
+    auto ls = leaves(x);
+    for (size_t i = 0; i < mems.size(); i++) mlir::memref::StoreOp::create(b, loc, ls[i], mems[i]);
+  }
+  Val load(Location loc, const std::vector<Value> &mems, const Type &t) {
+    std::vector<Value> ls;
+    for (auto m : mems) ls.push_back(mlir::memref::LoadOp::create(b, loc, m));
+    return fromLeaves(t, ls);
+  }
+
+  // An assignable location: a variable or one of its tuple fields.
+  struct LV {
+    std::vector<Value> mems;
+    Type type;
+    bool isConst;
+    std::string key; // "t" or "t.2", for aliasing checks
+  };
+  LV resolveLV(const std::string &name, int idx, int line) {
+    Var &v = need(name, line);
+    if (idx == 0) return {v.mems, v.type, v.isConst, name};
+    if (!v.type.isTuple())
+      throw err("TypeError", line, "'" + name + "' is not a tuple");
+    if (idx < 1 || (size_t)idx > v.type.elems.size())
+      throw err("IndexError", line, "tuple field index " + std::to_string(idx) + " is out of range");
+    size_t off = 0;
+    for (int k = 0; k < idx - 1; k++) off += leafCount(v.type.elems[k]);
+    size_t n = leafCount(v.type.elems[idx - 1]);
+    return {std::vector<Value>(v.mems.begin() + off, v.mems.begin() + off + n),
+            v.type.elems[idx - 1], v.isConst, name + "." + std::to_string(idx)};
   }
 
   // ---- expressions ----
-  struct Val {
-    Value v;
-    Type t;
-  };
-
   // `procOk`: a procedure call is legal here (right-hand side of a declaration
   // or assignment, possibly under unary operators and casts).
   Val genExpr(const Expr &e, bool procOk = false) {
@@ -208,7 +359,7 @@ private:
       long long v = std::stoll(e.text);
       if (v > 2147483647LL)
         throw err("LiteralError", e.line, "integer literal does not fit in 32 bits");
-      return {constInt(loc, b.getI32Type(), v), Type::Integer};
+      return scalar(constInt(loc, b.getI32Type(), v), Type::Integer);
     }
     case Expr::RealLit: {
       float v;
@@ -217,25 +368,38 @@ private:
       } catch (std::out_of_range &) {
         throw err("LiteralError", e.line, "real literal does not fit in 32 bits");
       }
-      return {mlir::arith::ConstantOp::create(b, loc, b.getF32FloatAttr(v)), Type::Real};
+      return scalar(mlir::arith::ConstantOp::create(b, loc, b.getF32FloatAttr(v)), Type::Real);
     }
     case Expr::StrLit:
       throw err("TypeError", e.line, "string values are only supported as stream output");
     case Expr::StreamState:
-      return {rtCall(loc, "gaz_stream_state", {b.getI32Type()}, {}), Type::Integer};
+      return scalar(rtCall(loc, "gaz_stream_state", {b.getI32Type()}, {}), Type::Integer);
     case Expr::BoolLit:
-      return {constInt(loc, b.getI1Type(), e.text == "true"), Type::Boolean};
+      return scalar(constInt(loc, b.getI1Type(), e.text == "true"), Type::Boolean);
     case Expr::CharLit:
-      return {constInt(loc, b.getI8Type(), (unsigned char)e.text[0]),
-              Type::Character};
+      return scalar(constInt(loc, b.getI8Type(), (unsigned char)e.text[0]), Type::Character);
     case Expr::Var: {
-      Var *var = lookup(e.text);
-      if (!var) throw err("SymbolError", e.line, "undefined variable '" + e.text + "'");
-      return {mlir::memref::LoadOp::create(b, loc, var->mem), var->type};
+      Var &v = need(e.text, e.line);
+      return load(loc, v.mems, v.type);
+    }
+    case Expr::TupleAccess: {
+      LV lv = resolveLV(e.text, e.idx, e.line);
+      return load(loc, lv.mems, lv.type);
+    }
+    case Expr::TupleLit: {
+      std::vector<Type> ts;
+      std::vector<Value> ls;
+      for (auto &a : e.args) {
+        Val x = genExpr(*a);
+        ts.push_back(x.t);
+        auto part = leaves(x);
+        ls.insert(ls.end(), part.begin(), part.end());
+      }
+      return fromLeaves(Type::tuple(ts), ls);
     }
     case Expr::Cast: {
       Val x = genExpr(*e.args[0], procOk);
-      return {cast(loc, e.line, x.v, x.t, e.castTo), e.castTo};
+      return cast(loc, e.line, x, e.castTo);
     }
     case Expr::Unary: return genUnary(e, procOk);
     case Expr::Binary: return genBinary(e);
@@ -250,6 +414,18 @@ private:
   }
 
   enum class CallPos { Stmt, Expr, ExprProcOk };
+
+  // Name of the variable/field an argument expression denotes, if any.
+  static bool lvKey(const Expr &e, std::string &key) {
+    if (e.kind == Expr::Var) { key = e.text; return true; }
+    if (e.kind == Expr::TupleAccess) { key = e.text + "." + std::to_string(e.idx); return true; }
+    return false;
+  }
+  static bool aliases(const std::string &a, const std::string &b) {
+    if (a == b) return true;
+    return (a.size() < b.size() && b.compare(0, a.size(), a) == 0 && b[a.size()] == '.') ||
+           (b.size() < a.size() && a.compare(0, b.size(), b) == 0 && a[b.size()] == '.');
+  }
 
   Val genCall(const std::string &name, const std::vector<ExprP> &args, int line,
               CallPos pos) {
@@ -269,15 +445,40 @@ private:
     }
     if (fi.params.size() != args.size())
       throw err("TypeError", line, "wrong number of arguments to '" + name + "'");
+
+    // Two arguments that may name the same storage, one bound to a var
+    // parameter, are an AliasingError.
+    for (size_t i = 0; i < args.size(); i++)
+      for (size_t j = i + 1; j < args.size(); j++) {
+        std::string ki, kj;
+        if ((fi.isVar[i] || fi.isVar[j]) && lvKey(*args[i], ki) && lvKey(*args[j], kj) &&
+            aliases(ki, kj))
+          throw err("AliasingError", line,
+                    "arguments '" + ki + "' and '" + kj + "' may alias in call to '" + name + "'");
+      }
+
     std::vector<Value> vals;
     for (size_t i = 0; i < args.size(); i++) {
-      Val a = genExpr(*args[i]);
-      vals.push_back(coerce(loc, line, a.v, a.t, fi.params[i], "argument"));
+      if (fi.isVar[i]) {
+        const Expr &a = *args[i];
+        if (a.kind != Expr::Var && a.kind != Expr::TupleAccess)
+          throw err("TypeError", line, "only a variable can be passed to a var parameter");
+        LV lv = resolveLV(a.text, a.kind == Expr::Var ? 0 : a.idx, a.line);
+        if (lv.isConst)
+          throw err("AssignError", line, "const '" + lv.key + "' passed to a var parameter");
+        if (lv.type != fi.params[i])
+          throw err("TypeError", line,
+                    "var parameter needs exactly " + typeName(fi.params[i]) + ", got " + typeName(lv.type));
+        vals.insert(vals.end(), lv.mems.begin(), lv.mems.end());
+      } else {
+        Val x = coerce(loc, line, genExpr(*args[i]), fi.params[i], "argument");
+        auto ls = leaves(x);
+        vals.insert(vals.end(), ls.begin(), ls.end());
+      }
     }
-    std::vector<mlir::Type> res;
-    if (fi.ret != Type::Void) res.push_back(mlirType(fi.ret));
-    auto c = mlir::func::CallOp::create(b, loc, "gaz_" + name, res, vals);
-    return {res.empty() ? Value() : c.getResult(0), fi.ret};
+    auto c = mlir::func::CallOp::create(b, loc, "gaz_" + name, valueTypes(fi.ret), vals);
+    std::vector<Value> rs(c.getResults().begin(), c.getResults().end());
+    return fromLeaves(fi.ret, rs);
   }
 
   // 32-bit signed arithmetic that raises MathError on overflow: compute in i64
@@ -310,15 +511,37 @@ private:
     Val x = genExpr(*e.args[0], procOk);
     if (e.text == "not") {
       if (x.t != Type::Boolean) throw err("TypeError", e.line, "'not' needs a boolean");
-      return {mlir::arith::XOrIOp::create(b, loc, x.v, constInt(loc, b.getI1Type(), 1)),
-              Type::Boolean};
+      return scalar(mlir::arith::XOrIOp::create(b, loc, x.v, constInt(loc, b.getI1Type(), 1)),
+                    Type::Boolean);
     }
-    if (x.t != Type::Integer && x.t != Type::Real)
+    if (!x.t.isNumeric())
       throw err("TypeError", e.line, "unary '" + e.text + "' needs a number");
     if (e.text == "+") return x;
-    if (x.t == Type::Real)
-      return {mlir::arith::NegFOp::create(b, loc, x.v), Type::Real};
-    return {checkedInt(loc, "-", constInt(loc, b.getI32Type(), 0), x.v), Type::Integer};
+    if (x.t == Type::Real) return scalar(mlir::arith::NegFOp::create(b, loc, x.v), Type::Real);
+    return scalar(checkedInt(loc, "-", constInt(loc, b.getI32Type(), 0), x.v), Type::Integer);
+  }
+
+  // Pairwise equality; members are implicitly cast to a common type.
+  Value genEq(Location loc, int line, Val a, Val c) {
+    if (a.t.isTuple() || c.t.isTuple()) {
+      if (!(a.t.isTuple() && c.t.isTuple()) || a.t.elems.size() != c.t.elems.size())
+        throw err("TypeError", line,
+                  "cannot compare " + typeName(a.t) + " with " + typeName(c.t));
+      Value acc = constInt(loc, b.getI1Type(), 1);
+      for (size_t i = 0; i < a.t.elems.size(); i++)
+        acc = mlir::arith::AndIOp::create(b, loc, acc, genEq(loc, line, elem(a, i), elem(c, i)));
+      return acc;
+    }
+    if (a.t != c.t) {
+      if (a.t == Type::Integer && c.t == Type::Real) a = coerce(loc, line, a, Type::Real, "comparison");
+      else if (a.t == Type::Real && c.t == Type::Integer) c = coerce(loc, line, c, Type::Real, "comparison");
+      else
+        throw err("TypeError", line,
+                  "cannot compare " + typeName(a.t) + " with " + typeName(c.t));
+    }
+    if (a.t == Type::Real)
+      return mlir::arith::CmpFOp::create(b, loc, mlir::arith::CmpFPredicate::OEQ, a.v, c.v);
+    return mlir::arith::CmpIOp::create(b, loc, mlir::arith::CmpIPredicate::eq, a.v, c.v);
   }
 
   Val genBinary(const Expr &e) {
@@ -334,69 +557,52 @@ private:
       Value v = op == "and"  ? mlir::arith::AndIOp::create(b, loc, l.v, r.v).getResult()
                 : op == "or" ? mlir::arith::OrIOp::create(b, loc, l.v, r.v).getResult()
                              : mlir::arith::XOrIOp::create(b, loc, l.v, r.v).getResult();
-      return {v, Type::Boolean};
+      return scalar(v, Type::Boolean);
     }
 
     if (op == "==" || op == "!=") {
-      if (l.t != r.t) { // allow integer/real mixing
-        if (l.t == Type::Integer && r.t == Type::Real)
-          l = {coerce(loc, e.line, l.v, l.t, Type::Real, "comparison"), Type::Real};
-        else if (l.t == Type::Real && r.t == Type::Integer)
-          r = {coerce(loc, e.line, r.v, r.t, Type::Real, "comparison"), Type::Real};
-        else
-          throw err("TypeError", e.line, std::string("cannot compare ") +
-                                             typeName(l.t) + " with " + typeName(r.t));
-      }
-      bool eq = op == "==";
-      if (l.t == Type::Real)
-        return {mlir::arith::CmpFOp::create(b, loc, eq ? FP::OEQ : FP::UNE, l.v, r.v),
-                Type::Boolean};
-      return {mlir::arith::CmpIOp::create(b, loc, eq ? P::eq : P::ne, l.v, r.v),
-              Type::Boolean};
+      Value eq = genEq(loc, e.line, l, r);
+      if (op == "!=") eq = mlir::arith::XOrIOp::create(b, loc, eq, constInt(loc, b.getI1Type(), 1));
+      return scalar(eq, Type::Boolean);
     }
 
     // remaining operators are numeric
-    if ((l.t != Type::Integer && l.t != Type::Real) ||
-        (r.t != Type::Integer && r.t != Type::Real))
+    if (!l.t.isNumeric() || !r.t.isNumeric())
       throw err("TypeError", e.line, "operator '" + op + "' needs numeric operands");
     bool real = l.t == Type::Real || r.t == Type::Real;
     if (real) {
-      l = {coerce(loc, e.line, l.v, l.t, Type::Real, "expression"), Type::Real};
-      r = {coerce(loc, e.line, r.v, r.t, Type::Real, "expression"), Type::Real};
+      l = coerce(loc, e.line, l, Type::Real, "expression");
+      r = coerce(loc, e.line, r, Type::Real, "expression");
     }
 
     if (op == "<" || op == ">" || op == "<=" || op == ">=") {
       if (real) {
         FP p = op == "<" ? FP::OLT : op == ">" ? FP::OGT : op == "<=" ? FP::OLE : FP::OGE;
-        return {mlir::arith::CmpFOp::create(b, loc, p, l.v, r.v), Type::Boolean};
+        return scalar(mlir::arith::CmpFOp::create(b, loc, p, l.v, r.v), Type::Boolean);
       }
       P p = op == "<" ? P::slt : op == ">" ? P::sgt : op == "<=" ? P::sle : P::sge;
-      return {mlir::arith::CmpIOp::create(b, loc, p, l.v, r.v), Type::Boolean};
+      return scalar(mlir::arith::CmpIOp::create(b, loc, p, l.v, r.v), Type::Boolean);
     }
 
     Type rt = real ? Type::Real : Type::Integer;
-    auto i32 = b.getI32Type();
-    auto f32 = b.getF32Type();
+    mlir::Type i32 = b.getI32Type(), f32 = b.getF32Type();
+    Value v;
     if (op == "+")
-      return {real ? mlir::arith::AddFOp::create(b, loc, l.v, r.v).getResult()
-                   : checkedInt(loc, op, l.v, r.v), rt};
-    if (op == "-")
-      return {real ? mlir::arith::SubFOp::create(b, loc, l.v, r.v).getResult()
-                   : checkedInt(loc, op, l.v, r.v), rt};
-    if (op == "*")
-      return {real ? mlir::arith::MulFOp::create(b, loc, l.v, r.v).getResult()
-                   : checkedInt(loc, op, l.v, r.v), rt};
-    if (op == "/")
-      return {real ? mlir::arith::DivFOp::create(b, loc, l.v, r.v).getResult()
-                   : rtCall(loc, "gaz_idiv", {i32}, {l.v, r.v}), rt};
-    if (op == "%") {
-      if (real) return {rtCall(loc, "gaz_rmod", {f32}, {l.v, r.v}), rt};
-      return {rtCall(loc, "gaz_imod", {i32}, {l.v, r.v}), rt};
-    }
-    if (op == "^")
-      return {real ? rtCall(loc, "gaz_rpow", {f32}, {l.v, r.v})
-                   : rtCall(loc, "gaz_ipow", {i32}, {l.v, r.v}), rt};
-    throw err("TypeError", e.line, "unknown operator '" + op + "'");
+      v = real ? mlir::arith::AddFOp::create(b, loc, l.v, r.v).getResult() : checkedInt(loc, op, l.v, r.v);
+    else if (op == "-")
+      v = real ? mlir::arith::SubFOp::create(b, loc, l.v, r.v).getResult() : checkedInt(loc, op, l.v, r.v);
+    else if (op == "*")
+      v = real ? mlir::arith::MulFOp::create(b, loc, l.v, r.v).getResult() : checkedInt(loc, op, l.v, r.v);
+    else if (op == "/")
+      v = real ? mlir::arith::DivFOp::create(b, loc, l.v, r.v).getResult()
+               : rtCall(loc, "gaz_idiv", {i32}, {l.v, r.v});
+    else if (op == "%")
+      v = real ? rtCall(loc, "gaz_rmod", {f32}, {l.v, r.v}) : rtCall(loc, "gaz_imod", {i32}, {l.v, r.v});
+    else if (op == "^")
+      v = real ? rtCall(loc, "gaz_rpow", {f32}, {l.v, r.v}) : rtCall(loc, "gaz_ipow", {i32}, {l.v, r.v});
+    else
+      throw err("TypeError", e.line, "unknown operator '" + op + "'");
+    return scalar(v, rt);
   }
 
   // ---- statements ----
@@ -438,6 +644,10 @@ private:
     scopes.pop_back();
   }
 
+  void needIO(const Stmt &s) {
+    if (!curIsProc) throw err("StatementError", s.line, "I/O is not allowed in a function");
+  }
+
   void genStmt(const Stmt &s) {
     Location loc = b.getUnknownLoc();
     switch (s.kind) {
@@ -446,41 +656,53 @@ private:
       if (scopes.back().count(s.name))
         throw err("SymbolError", s.line, "'" + s.name + "' already declared in this scope");
       Type t = s.declType;
-      Value init;
+      Val init;
       if (s.expr) {
         Val x = genExpr(*s.expr, true);
         if (!s.hasType) t = x.t;
-        init = coerce(loc, s.line, x.v, x.t, t, "declaration");
+        init = coerce(loc, s.line, x, t, "declaration");
       } else {
-        // Uninitialised variables default to zero.
-        init = t == Type::Real
-                   ? mlir::arith::ConstantOp::create(b, loc, b.getF32FloatAttr(0))
-                         .getResult()
-                   : constInt(loc, mlirType(t), 0);
+        init = zeroVal(loc, t); // uninitialised variables default to zero
       }
-      Value mem = newSlot(loc, t);
-      mlir::memref::StoreOp::create(b, loc, init, mem);
-      scopes.back()[s.name] = {mem, t, s.isConst};
+      auto mems = newSlots(loc, t);
+      store(loc, mems, init);
+      scopes.back()[s.name] = {mems, t, s.isConst};
       return;
     }
     case Stmt::Assign: {
-      Var *v = lookup(s.name);
-      if (!v) throw err("SymbolError", s.line, "undefined variable '" + s.name + "'");
-      if (v->isConst) throw err("AssignError", s.line, "assignment to const '" + s.name + "'");
-      Val x = genExpr(*s.expr, true);
-      mlir::memref::StoreOp::create(
-          b, loc, coerce(loc, s.line, x.v, x.t, v->type, "assignment"), v->mem);
+      LV lv = resolveLV(s.name, s.idx, s.line);
+      if (lv.isConst) throw err("AssignError", s.line, "assignment to const '" + lv.key + "'");
+      Val x = coerce(loc, s.line, genExpr(*s.expr, true), lv.type, "assignment");
+      store(loc, lv.mems, x);
+      return;
+    }
+    case Stmt::Unpack: {
+      Val x = genExpr(*s.expr);
+      if (!x.t.isTuple())
+        throw err("TypeError", s.line, "cannot unpack " + typeName(x.t));
+      if (x.t.elems.size() != s.names.size())
+        throw err("AssignError", s.line,
+                  "unpacking " + std::to_string(s.names.size()) + " variables from a tuple of " +
+                      std::to_string(x.t.elems.size()));
+      // The right-hand side is fully evaluated first, so swaps work.
+      std::vector<std::pair<LV, Val>> writes;
+      for (size_t i = 0; i < s.names.size(); i++) {
+        LV lv = resolveLV(s.names[i], 0, s.line);
+        if (lv.isConst) throw err("AssignError", s.line, "assignment to const '" + lv.key + "'");
+        writes.push_back({lv, coerce(loc, s.line, elem(x, i), lv.type, "unpacking")});
+      }
+      for (auto &[lv, v] : writes) store(loc, lv.mems, v);
       return;
     }
     case Stmt::Output: {
-      if (!curIsProc) throw err("StatementError", s.line, "I/O is not allowed in a function");
+      needIO(s);
       if (s.expr->kind == Expr::StrLit) {
         for (unsigned char ch : s.expr->text)
           rtCall(loc, "gaz_print_char", {}, {constInt(loc, b.getI8Type(), ch)});
         return;
       }
       Val x = genExpr(*s.expr);
-      switch (x.t) {
+      switch (x.t.kind) {
       case Type::Integer: rtCall(loc, "gaz_print_int", {}, {x.v}); break;
       case Type::Real: rtCall(loc, "gaz_print_real", {}, {x.v}); break;
       case Type::Character: rtCall(loc, "gaz_print_char", {}, {x.v}); break;
@@ -488,29 +710,27 @@ private:
         rtCall(loc, "gaz_print_bool", {},
                {mlir::arith::ExtUIOp::create(b, loc, b.getI32Type(), x.v)});
         break;
-      default: throw err("TypeError", s.line, "cannot print this value");
+      default: throw err("TypeError", s.line, "cannot print a value of type " + typeName(x.t));
       }
       return;
     }
     case Stmt::Input: {
-      if (!curIsProc) throw err("StatementError", s.line, "I/O is not allowed in a function");
-      Var *v = lookup(s.name);
-      if (!v) throw err("SymbolError", s.line, "undefined variable '" + s.name + "'");
-      if (v->isConst) throw err("AssignError", s.line, "input into const '" + s.name + "'");
+      needIO(s);
+      LV lv = resolveLV(s.name, s.idx, s.line);
+      if (lv.isConst) throw err("AssignError", s.line, "input into const '" + lv.key + "'");
       Value r;
-      switch (v->type) {
+      switch (lv.type.kind) {
       case Type::Integer: r = rtCall(loc, "gaz_read_int", {b.getI32Type()}, {}); break;
       case Type::Real: r = rtCall(loc, "gaz_read_real", {b.getF32Type()}, {}); break;
       case Type::Character: r = rtCall(loc, "gaz_read_char", {b.getI8Type()}, {}); break;
       case Type::Boolean:
         r = mlir::arith::CmpIOp::create(
             b, loc, mlir::arith::CmpIPredicate::ne,
-            rtCall(loc, "gaz_read_bool", {b.getI32Type()}, {}),
-            constInt(loc, b.getI32Type(), 0));
+            rtCall(loc, "gaz_read_bool", {b.getI32Type()}, {}), constInt(loc, b.getI32Type(), 0));
         break;
-      default: throw err("TypeError", s.line, "cannot read into this type");
+      default: throw err("TypeError", s.line, "cannot read into " + typeName(lv.type));
       }
-      mlir::memref::StoreOp::create(b, loc, r, v->mem);
+      mlir::memref::StoreOp::create(b, loc, r, lv.mems[0]);
       return;
     }
     case Stmt::CallS: genCall(s.name, s.args, s.line, CallPos::Stmt); return;
@@ -520,9 +740,8 @@ private:
         mlir::func::ReturnOp::create(b, loc, mlir::ValueRange{});
       } else {
         if (!s.expr) throw err("TypeError", s.line, "missing return value");
-        Val x = genExpr(*s.expr);
-        mlir::func::ReturnOp::create(
-            b, loc, coerce(loc, s.line, x.v, x.t, curRet, "return"));
+        Val x = coerce(loc, s.line, genExpr(*s.expr), curRet, "return");
+        mlir::func::ReturnOp::create(b, loc, leaves(x));
       }
       return;
     }
@@ -627,7 +846,7 @@ private:
     scopes.emplace_back();
     Value iv = newSlot(loc, Type::Integer);
     mlir::memref::StoreOp::create(b, loc, mlir::memref::LoadOp::create(b, loc, cur), iv);
-    scopes.back()[s.name] = {iv, Type::Integer, true};
+    scopes.back()[s.name] = {{iv}, Type::Integer, true};
     loops.push_back({stepB, exitB});
     genBlock(s.body);
     branchIfOpen(stepB);
@@ -643,12 +862,16 @@ private:
     if (f.ret != Type::Void && !f.exprBody && !alwaysReturns(f.body))
       throw err("ReturnError", f.line,
                 "'" + f.name + "' does not return on every control path");
-    std::vector<mlir::Type> in, out;
-    for (auto &p : f.params) in.push_back(mlirType(p.type));
-    if (f.ret != Type::Void) out.push_back(mlirType(f.ret));
+
+    // by-value parameters arrive as scalar leaves, var parameters as memrefs
+    std::vector<mlir::Type> in;
+    for (auto &p : f.params) {
+      auto ts = p.isVar ? refTypes(p.type) : valueTypes(p.type);
+      in.insert(in.end(), ts.begin(), ts.end());
+    }
     b.setInsertionPointToEnd(module->getBody());
     curFn = mlir::func::FuncOp::create(b, loc, "gaz_" + f.name,
-                                       b.getFunctionType(in, out));
+                                       b.getFunctionType(in, valueTypes(f.ret)));
     entry = curFn.addEntryBlock();
     b.setInsertionPointToStart(entry);
     curRet = f.ret;
@@ -656,42 +879,36 @@ private:
     scopes.clear();
     loops.clear();
     scopes.emplace_back();
-    for (size_t i = 0; i < f.params.size(); i++) {
-      Value mem = newSlot(loc, f.params[i].type);
-      mlir::memref::StoreOp::create(b, loc, entry->getArgument(i), mem);
-      scopes.back()[f.params[i].name] = {mem, f.params[i].type, true};
+    size_t arg = 0;
+    for (auto &p : f.params) {
+      size_t n = leafCount(p.type);
+      std::vector<Value> args;
+      for (size_t k = 0; k < n; k++) args.push_back(entry->getArgument(arg + k));
+      arg += n;
+      if (p.name.empty()) continue;
+      if (scopes.back().count(p.name))
+        throw err("SymbolError", f.line, "duplicate parameter '" + p.name + "'");
+      if (p.isVar) {
+        scopes.back()[p.name] = {args, p.type, false}; // by reference
+      } else {
+        auto mems = newSlots(loc, p.type);
+        store(loc, mems, fromLeaves(p.type, args));
+        scopes.back()[p.name] = {mems, p.type, true};
+      }
     }
 
     if (f.exprBody) {
-      Val x = genExpr(*f.exprBody);
-      mlir::func::ReturnOp::create(
-          b, loc, coerce(loc, f.line, x.v, x.t, f.ret, "function body"));
+      Val x = coerce(loc, f.line, genExpr(*f.exprBody), f.ret, "function body");
+      mlir::func::ReturnOp::create(b, loc, leaves(x));
     } else {
       genBlock(f.body);
-      // Falling off the end: implicit return (zero value for non-void).
-      if (terminated()) { /* ok */ } else if (f.ret == Type::Void) {
-        mlir::func::ReturnOp::create(b, loc, mlir::ValueRange{});
-      } else {
-        Value z = f.ret == Type::Real
-                      ? mlir::arith::ConstantOp::create(b, loc, b.getF32FloatAttr(0))
-                            .getResult()
-                      : constInt(loc, mlirType(f.ret), 0);
-        mlir::func::ReturnOp::create(b, loc, z);
-      }
+      if (!terminated()) mlir::func::ReturnOp::create(b, loc, leaves(zeroVal(loc, f.ret)));
     }
     // Terminate any leftover unreachable blocks.
     for (Block &blk : curFn.getBody()) {
       if (!blk.empty() && blk.back().hasTrait<mlir::OpTrait::IsTerminator>()) continue;
       b.setInsertionPointToEnd(&blk);
-      if (f.ret == Type::Void) {
-        mlir::func::ReturnOp::create(b, loc, mlir::ValueRange{});
-      } else {
-        Value z = f.ret == Type::Real
-                      ? mlir::arith::ConstantOp::create(b, loc, b.getF32FloatAttr(0))
-                            .getResult()
-                      : constInt(loc, mlirType(f.ret), 0);
-        mlir::func::ReturnOp::create(b, loc, z);
-      }
+      mlir::func::ReturnOp::create(b, loc, leaves(zeroVal(loc, f.ret)));
     }
     pruneUnreachable();
   }

@@ -1,0 +1,5 @@
+function f() returns tuple(integer, integer) = (1, 2);
+procedure main() returns integer {
+  var integer x = f().1;
+  return 0;
+}

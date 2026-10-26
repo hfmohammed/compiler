@@ -1,0 +1,5 @@
+procedure main() returns integer {
+  const t = (1, 2);
+  t.1 = 5;
+  return 0;
+}

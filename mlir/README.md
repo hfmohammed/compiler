@@ -37,17 +37,29 @@ number and exit non-zero; runtime errors (e.g. division by zero) print
 
 ## Supported
 
-- Types `integer` (i32), `real` (f32), `boolean`, `character`; `const`/`var`,
-  inferred declarations, integer → real promotion, `as<T>(e)` casts
-- Operators `or xor and == != < > <= >= + - * / % ^ not` with Gazprea precedence
-- `if`/`else`, `loop`, `loop while`, `loop … while (c);`, `break`, `continue`
-- Functions (block or `= expr` body) and procedures, `call` statements
-- `expr -> std_output;` and `x <- std_input;`
+- Types `integer` (i32), `real` (f32), `boolean`, `character`, and `tuple(...)`
+  (nested, with `t.1` access, literals, `==`/`!=`, unpacking `a, b = t;`,
+  implicit and explicit member-wise casts, tuple parameters and results)
+- `const`/`var` (a typed declaration with no qualifier is `const`), inferred
+  declarations, `as<T>(e)` casts
+- Operators `or xor and == != < > <= >= + - * / % ^ not` with Gazprea precedence;
+  integer overflow, division by zero and `0^n` (n ≤ 0) raise `MathError`
+- `if`/`else`, `loop`, `loop while`, `loop … while (c);`, `loop i in lo..hi`,
+  `break`, `continue`
+- Functions (block or `= expr` body) and procedures with `const` (default) and
+  `var` (by-reference) parameters, prototypes, `call` statements, the
+  procedure-call position rules, and the aliasing check
+- Streams: `expr -> std_output;` (string literals allowed), `lvalue <- std_input;`,
+  `stream_state(std_input)`
+- Spec error names: `SyntaxError SymbolError TypeError AssignError MainError
+  ReturnError StatementError CallError DefinitionError AliasingError
+  LiteralError IndexError MathError`, reported as `Name on line N: message`
 
 ## Not yet implemented
 
-Tuples, structs, arrays/vectors/strings/matrices, generators, typealias,
-globals, prototypes, `-O2` flag handling.
+Structs, arrays/vectors/strings/matrices, generators and domain expressions,
+`by`/`||`/`**`, typealias, globals, `format`/`length`/`rows`/`columns`/`reverse`,
+string values (string literals work only as stream output), `-O2` flag handling.
 
 ## Tests
 

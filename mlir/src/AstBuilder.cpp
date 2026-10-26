@@ -37,6 +37,14 @@ private:
     case P::KW_INTEGER: return Type::Integer;
     case P::KW_REAL: return Type::Real;
     case P::KW_BOOLEAN: return Type::Boolean;
+    case P::KW_TUPLE: {
+      std::vector<Type> elems;
+      for (auto *e : t->type()) elems.push_back(type(e));
+      if (elems.size() < 2)
+        throw std::runtime_error("TypeError on line " + std::to_string(lineOf(t)) +
+                                 ": a tuple needs at least two members");
+      return Type::tuple(std::move(elems));
+    }
     default: return Type::Character;
     }
   }
@@ -50,11 +58,16 @@ private:
       throw std::runtime_error("SyntaxError on line " + std::to_string(f.line) +
                                ": procedures cannot have an expression body");
     for (auto *p : c->param()) {
-      if (!f.isProcedure && p->CONST())
+      if (!f.isProcedure && p->qual)
         throw std::runtime_error("SyntaxError on line " + std::to_string(f.line) +
                                  ": function parameters cannot have qualifiers");
-      f.params.push_back({type(p->type()), p->ID()->getText()});
+      Param prm;
+      prm.type = type(p->type());
+      prm.isVar = p->qual && p->qual->getType() == P::VAR;
+      if (p->ID()) prm.name = p->ID()->getText();
+      f.params.push_back(prm);
     }
+    f.isProto = !c->expr() && c->stmt().empty() && c->getText().back() == ';';
     if (c->type()) f.ret = type(c->type());
     if (c->expr()) f.exprBody = expr(c->expr());
     else f.body = stmts(c->stmt());
@@ -158,9 +171,23 @@ private:
       s->expr = expr(x->expr());
       return s;
     }
+    if (auto *x = dynamic_cast<P::TupleAssignStmtContext *>(c)) {
+      auto s = mk(Stmt::Assign, c);
+      s->name = x->ID()->getText();
+      s->idx = fieldIndex(x->INT_LIT(), s->line);
+      s->expr = expr(x->expr());
+      return s;
+    }
+    if (auto *x = dynamic_cast<P::UnpackStmtContext *>(c)) {
+      auto s = mk(Stmt::Unpack, c);
+      for (auto *id : x->ID()) s->names.push_back(id->getText());
+      s->expr = expr(x->expr());
+      return s;
+    }
     if (auto *x = dynamic_cast<P::InputStmtContext *>(c)) {
       auto s = mk(Stmt::Input, c);
       s->name = x->ID()->getText();
+      if (x->INT_LIT()) s->idx = fieldIndex(x->INT_LIT(), s->line);
       return s;
     }
     auto *x = dynamic_cast<P::OutputStmtContext *>(c);
@@ -221,8 +248,31 @@ private:
     return v;
   }
 
+  static int fieldIndex(antlr4::tree::TerminalNode *lit, int line) {
+    int v = 0;
+    try {
+      v = std::stoi(lit->getText());
+    } catch (std::out_of_range &) {
+      v = 0;
+    }
+    if (v < 1) // 0 and anything that does not fit are never valid field indices
+      throw std::runtime_error("IndexError on line " + std::to_string(line) +
+                               ": tuple field indices start at 1");
+    return v;
+  }
+
   ExprP expr(P::ExprContext *c) {
     if (auto *x = dynamic_cast<P::ParenExprContext *>(c)) return expr(x->expr());
+    if (auto *x = dynamic_cast<P::TupleLitContext *>(c)) {
+      auto e = node(Expr::TupleLit, c);
+      for (auto *a : x->expr()) e->args.push_back(expr(a));
+      return e;
+    }
+    if (auto *x = dynamic_cast<P::TupleAccessContext *>(c)) {
+      auto e = node(Expr::TupleAccess, c, x->ID()->getText());
+      e->idx = fieldIndex(x->INT_LIT(), e->line);
+      return e;
+    }
     if (auto *x = dynamic_cast<P::CallExprContext *>(c)) {
       auto e = node(Expr::Call, c, x->ID()->getText());
       for (auto *a : x->expr()) e->args.push_back(expr(a));

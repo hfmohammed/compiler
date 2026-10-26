@@ -1,0 +1,7 @@
+procedure p(var integer a, var integer b) { }
+
+procedure main() returns integer {
+  integer x = 0; var integer y = 0;
+  call p(x, y);
+  return 0;
+}

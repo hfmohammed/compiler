@@ -1,0 +1,7 @@
+procedure main() returns integer {
+  var t = (1, true, 'c', 2.5);
+  t.1 -> std_output; t.2 -> std_output; t.3 -> std_output; t.4 -> std_output; '\n' -> std_output;
+  const c = (10, 20);
+  (c.1 + c.2) -> std_output; '\n' -> std_output;
+  return 0;
+}

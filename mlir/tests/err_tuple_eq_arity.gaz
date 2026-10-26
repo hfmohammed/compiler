@@ -1,0 +1,4 @@
+procedure main() returns integer {
+  var b = (1, 2) == (1, 2, 3);
+  return 0;
+}

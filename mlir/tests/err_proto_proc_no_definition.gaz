@@ -1,0 +1,5 @@
+procedure q(var integer x);
+procedure main() returns integer {
+
+  return 0;
+}

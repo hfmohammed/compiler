@@ -1,0 +1,11 @@
+procedure main() returns integer {
+  tuple(integer, integer) int_tup = (1, 2);
+  tuple(real, boolean) rb_tup = as<tuple(real, boolean)>(int_tup);
+  rb_tup.1 -> std_output; '\n' -> std_output;
+  rb_tup.2 -> std_output; '\n' -> std_output;
+  var t = as<tuple(integer, integer)>((1.9, -2.9));
+  t.1 -> std_output; ' ' -> std_output; t.2 -> std_output; '\n' -> std_output;
+  var u = as<tuple(character, integer)>((65, 66));
+  u.1 -> std_output; ' ' -> std_output; u.2 -> std_output; '\n' -> std_output;
+  return 0;
+}

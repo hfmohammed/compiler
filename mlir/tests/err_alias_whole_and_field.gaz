@@ -1,0 +1,6 @@
+procedure q(var tuple(integer, integer) a, var integer b) { }
+procedure main() returns integer {
+  var t = (1, 2);
+  call q(t, t.1);
+  return 0;
+}

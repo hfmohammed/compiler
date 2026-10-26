@@ -1,0 +1,11 @@
+procedure two(var integer a, var integer b) { a = 1; b = 2; }
+procedure ro(const integer a, const integer b) { (a + b) -> std_output; '\n' -> std_output; }
+procedure mixed(var integer a, const integer b, const integer c) { a = b + c; }
+procedure main() returns integer {
+  var integer x = 5; var integer y = 6;
+  call two(x, y);
+  call ro(x, x);
+  call mixed(x, y, y);
+  x -> std_output; '\n' -> std_output;
+  return 0;
+}

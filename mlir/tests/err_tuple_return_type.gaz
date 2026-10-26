@@ -1,0 +1,5 @@
+function f() returns tuple(integer, integer) = (1, 2, 3);
+procedure main() returns integer {
+
+  return 0;
+}

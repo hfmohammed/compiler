@@ -1,0 +1,5 @@
+function f(integer x) returns integer;
+procedure main() returns integer {
+
+  return 0;
+}

@@ -1,0 +1,6 @@
+procedure p(var integer x);
+procedure p(integer x) { }
+procedure main() returns integer {
+
+  return 0;
+}

@@ -1,0 +1,18 @@
+procedure main() returns integer {
+  tuple(integer, tuple(real, boolean)) n = (1, (2.5, true));
+  n.1 -> std_output; '\n' -> std_output;
+  var inner = n.2;
+  inner.1 -> std_output; inner.2 -> std_output; '\n' -> std_output;
+  var tuple(integer, tuple(real, boolean)) v = n;
+  v.2 = (3, false);
+  inner = v.2;
+  inner.1 -> std_output; inner.2 -> std_output; '\n' -> std_output;
+  (n == v) -> std_output; '\n' -> std_output;
+  v.2 = (2.5, true);
+  (n == v) -> std_output; '\n' -> std_output;
+  var deep = (1, (2, (3, 4)));
+  deep.2 = (20, (30, 40));
+  var d2 = deep.2;
+  d2.1 -> std_output; '\n' -> std_output;
+  return 0;
+}

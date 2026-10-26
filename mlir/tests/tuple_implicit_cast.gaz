@@ -1,0 +1,10 @@
+procedure main() returns integer {
+  tuple(integer, integer) pair = (1, 2);
+  tuple(real, real) rpair = pair;
+  rpair.1 -> std_output; ' ' -> std_output; rpair.2 -> std_output; '\n' -> std_output;
+  tuple(character, integer) src = ('a', 7);
+  tuple(character, real) dst = src;
+  dst.1 -> std_output; ' ' -> std_output; dst.2 -> std_output; '\n' -> std_output;
+  (rpair.1 / 2) -> std_output; '\n' -> std_output;
+  return 0;
+}

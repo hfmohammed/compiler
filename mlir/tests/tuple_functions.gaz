@@ -1,0 +1,17 @@
+function swap(tuple(integer, integer) p) returns tuple(integer, integer) = (p.2, p.1);
+function sum(tuple(integer, integer) p) returns integer = p.1 + p.2;
+function widen(tuple(integer, integer) p) returns tuple(real, real) = p;
+function first(tuple(integer, character) p) returns integer { return p.1; }
+procedure mk(integer a, real b) returns tuple(integer, real) { return (a, b); }
+procedure main() returns integer {
+  var s = swap((1, 2));
+  s.1 -> std_output; s.2 -> std_output; '\n' -> std_output;
+  sum((3, 4)) -> std_output; '\n' -> std_output;
+  var w = widen((1, 2));
+  (w.1 / 2) -> std_output; '\n' -> std_output;
+  var m = mk(5, 1.5);
+  m.1 -> std_output; ' ' -> std_output; m.2 -> std_output; '\n' -> std_output;
+  first((9, 'z')) -> std_output; '\n' -> std_output;
+  sum(swap(swap((20, 22)))) -> std_output; '\n' -> std_output;
+  return 0;
+}

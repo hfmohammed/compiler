@@ -1,0 +1,6 @@
+procedure main() returns integer {
+  var tuple(integer, boolean, character, real) t;
+  t.1 -> std_output; t.2 -> std_output; as<integer>(t.3) -> std_output; t.4 -> std_output;
+  '\n' -> std_output;
+  return 0;
+}

@@ -1,0 +1,6 @@
+procedure p() returns tuple(integer, integer) { return (1, 2); }
+procedure main() returns integer {
+  var integer a; var integer b;
+  a, b = p();
+  return 0;
+}

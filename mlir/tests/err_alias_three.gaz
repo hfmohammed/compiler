@@ -1,0 +1,6 @@
+procedure q(var integer a, const integer b, const integer c) { }
+procedure main() returns integer {
+  var integer x = 0; var integer y = 0;
+  call q(x, y, x);
+  return 0;
+}

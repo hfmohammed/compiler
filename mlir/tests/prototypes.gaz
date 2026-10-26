@@ -1,0 +1,22 @@
+function f(integer y, integer) returns integer;
+procedure p(var integer a);
+function isEven(integer n) returns boolean;
+function isOdd(integer n) returns boolean {
+  if (n == 0) { return false; }
+  return isEven(n - 1);
+}
+function isEven(integer n) returns boolean {
+  if (n == 0) { return true; }
+  return isOdd(n - 1);
+}
+procedure main() returns integer {
+  integer y = f(13, 2);
+  y -> std_output; '\n' -> std_output;
+  var integer v = 1;
+  call p(v);
+  v -> std_output; '\n' -> std_output;
+  isEven(10) -> std_output; isOdd(10) -> std_output; '\n' -> std_output;
+  return 0;
+}
+function f(integer x, integer z) returns integer = x*z;
+procedure p(var integer q) { q = q + 41; }

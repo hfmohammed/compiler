@@ -1,0 +1,6 @@
+procedure main() returns integer {
+  var integer a;
+  var integer b;
+  a, b = (1, 2, 3);
+  return 0;
+}

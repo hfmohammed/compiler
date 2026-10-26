@@ -1,0 +1,9 @@
+procedure main() returns integer {
+  var acc = (0, 0);
+  loop i in 1..5 { acc = (acc.1 + i, acc.2 + i * i); }
+  acc.1 -> std_output; ' ' -> std_output; acc.2 -> std_output; '\n' -> std_output;
+  var t = (1, 1);
+  loop while (t.2 < 100) { t = (t.1 + 1, t.2 * 2); }
+  t.1 -> std_output; ' ' -> std_output; t.2 -> std_output; '\n' -> std_output;
+  return 0;
+}

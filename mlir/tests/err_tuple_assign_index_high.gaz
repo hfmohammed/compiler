@@ -1,0 +1,5 @@
+procedure main() returns integer {
+  var tuple(integer, integer) t = (1, 2);
+  t.3 = 1;
+  return 0;
+}

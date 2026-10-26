@@ -1,0 +1,6 @@
+function f(integer x) returns integer;
+function f(real x) returns integer = 1;
+procedure main() returns integer {
+
+  return 0;
+}

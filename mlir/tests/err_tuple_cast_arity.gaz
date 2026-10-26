@@ -1,0 +1,4 @@
+procedure main() returns integer {
+  var t = as<tuple(integer, integer, integer)>((1, 2));
+  return 0;
+}

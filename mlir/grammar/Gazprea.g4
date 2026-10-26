@@ -15,12 +15,15 @@ program : func* EOF ;
 
 func
   : kind=(FUNCTION | PROCEDURE) name=ID '(' (param (',' param)*)? ')'
-    (RETURNS type)? ( '=' expr ';' | '{' stmt* '}' )
+    (RETURNS type)? ( '=' expr ';' | '{' stmt* '}' | ';' )
   ;
 
-param : CONST? type ID ;
+param : qual=(CONST | VAR)? type ID? ;
 
-type : KW_INTEGER | KW_REAL | KW_BOOLEAN | KW_CHARACTER ;
+type
+  : KW_INTEGER | KW_REAL | KW_BOOLEAN | KW_CHARACTER
+  | KW_TUPLE '(' type (',' type)* ')'
+  ;
 
 stmt
   : '{' stmt* '}'                                      # BlockStmt
@@ -35,13 +38,17 @@ stmt
   | RETURN expr? ';'                                   # ReturnStmt
   | CALL ID '(' (expr (',' expr)*)? ')' ';'            # CallStmt
   | ID '=' expr ';'                                    # AssignStmt
-  | ID '<-' STD_INPUT ';'                              # InputStmt
+  | ID '.' INT_LIT '=' expr ';'                        # TupleAssignStmt
+  | ID (',' ID)+ '=' expr ';'                          # UnpackStmt
+  | ID ('.' INT_LIT)? '<-' STD_INPUT ';'               # InputStmt
   | expr '->' STD_OUTPUT ';'                           # OutputStmt
   ;
 
 // Highest precedence first. '^' binds tighter than the unary operators.
 expr
   : '(' expr ')'                                       # ParenExpr
+  | '(' expr (',' expr)+ ')'                           # TupleLit
+  | ID '.' INT_LIT                                     # TupleAccess
   | ID '(' (expr (',' expr)*)? ')'                     # CallExpr
   | AS '<' type '>' '(' expr ')'                       # CastExpr
   | <assoc=right> expr '^' expr                        # PowExpr
@@ -85,6 +92,7 @@ KW_INTEGER   : 'integer' ;
 KW_REAL      : 'real' ;
 KW_BOOLEAN   : 'boolean' ;
 KW_CHARACTER : 'character' ;
+KW_TUPLE     : 'tuple' ;
 IN         : 'in' ;
 STREAM_STATE : 'stream_state' ;
 STD_INPUT  : 'std_input' ;

@@ -1,0 +1,5 @@
+procedure p(integer a) { a = 1; }
+procedure main() returns integer {
+
+  return 0;
+}
