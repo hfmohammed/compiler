@@ -1,0 +1,52 @@
+name: Attribution policy
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-commits:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reject unapproved attribution
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            range="$BASE_SHA..$HEAD_SHA"
+          elif [[ "$BEFORE_SHA" =~ ^0+$ ]]; then
+            range="$HEAD_SHA"
+          else
+            range="$BEFORE_SHA..$HEAD_SHA"
+          fi
+
+          allowed_emails='^(hf\.mohammed21@gmail\.com|hassanfarooq00@gmail\.com)$'
+
+          for commit in $(git rev-list "$range"); do
+            author_email=$(git show -s --format='%ae' "$commit")
+            committer_email=$(git show -s --format='%ce' "$commit")
+
+            if [[ ! "$author_email" =~ $allowed_emails ]] || \
+               [[ ! "$committer_email" =~ $allowed_emails ]]; then
+              echo "Unapproved author or committer on $commit"
+              exit 1
+            fi
+
+            if git show -s --format='%B' "$commit" | \
+               grep -Eiq '^[[:space:]]*(co-authored-by|assisted-by|generated-by):'; then
+              echo "Automated or co-author attribution trailer found on $commit"
+              exit 1
+            fi
+          done
