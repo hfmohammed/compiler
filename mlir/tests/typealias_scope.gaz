@@ -1,0 +1,14 @@
+typealias integer number;
+
+procedure main() returns integer {
+  number outer = 8;
+  {
+    typealias real number;
+    number inner = 2.5;
+    inner -> std_output;
+    '\n' -> std_output;
+  }
+  outer -> std_output;
+  '\n' -> std_output;
+  return 0;
+}

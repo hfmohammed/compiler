@@ -3,6 +3,7 @@
 #include "Parser.h"
 #include <cctype>
 #include <stdexcept>
+#include <unordered_map>
 
 namespace gaz {
 namespace {
@@ -23,11 +24,17 @@ class Builder {
 public:
   Program program(P::ProgramContext *ctx) {
     Program p;
-    for (auto *f : ctx->func()) p.funcs.push_back(func(f));
+    aliases.emplace_back();
+    for (auto *item : ctx->topLevel()) {
+      if (item->typeAliasDecl()) defineAlias(item->typeAliasDecl());
+      else p.funcs.push_back(func(item->func()));
+    }
     return p;
   }
 
 private:
+  std::vector<std::unordered_map<std::string, Type>> aliases;
+
   static int lineOf(antlr4::ParserRuleContext *c) {
     return (int)c->getStart()->getLine();
   }
@@ -45,8 +52,27 @@ private:
                                  ": a tuple needs at least two members");
       return Type::tuple(std::move(elems));
     }
-    default: return Type::Character;
+    case P::KW_CHARACTER: return Type::Character;
+    default: {
+      const std::string name = t->ID()->getText();
+      for (auto it = aliases.rbegin(); it != aliases.rend(); ++it) {
+        auto found = it->find(name);
+        if (found != it->end()) return found->second;
+      }
+      throw std::runtime_error("SymbolError on line " + std::to_string(lineOf(t)) +
+                               ": undefined type alias '" + name + "'");
     }
+    }
+  }
+
+  void defineAlias(P::TypeAliasDeclContext *c) {
+    const std::string name = c->ID()->getText();
+    Type target = type(c->type());
+    auto &scope = aliases.back();
+    if (scope.count(name))
+      throw std::runtime_error("SymbolError on line " + std::to_string(lineOf(c)) +
+                               ": type alias '" + name + "' already declared in this scope");
+    scope[name] = std::move(target);
   }
 
   Func func(P::FuncContext *c) {
@@ -75,8 +101,10 @@ private:
   }
 
   std::vector<StmtP> stmts(const std::vector<P::StmtContext *> &v) {
+    aliases.emplace_back();
     std::vector<StmtP> out;
     for (auto *s : v) out.push_back(stmt(s));
+    aliases.pop_back();
     return out;
   }
 
@@ -85,7 +113,9 @@ private:
   std::vector<StmtP> body(P::StmtContext *s) {
     if (auto *b = dynamic_cast<P::BlockStmtContext *>(s)) return stmts(b->stmt());
     std::vector<StmtP> v;
+    aliases.emplace_back();
     v.push_back(stmt(s));
+    aliases.pop_back();
     return v;
   }
 
@@ -115,6 +145,10 @@ private:
       auto s = mk(Stmt::Block, c);
       s->body = stmts(x->stmt());
       return s;
+    }
+    if (auto *x = dynamic_cast<P::TypeAliasStmtContext *>(c)) {
+      defineAlias(x->typeAliasDecl());
+      return mk(Stmt::TypeAlias, c);
     }
     if (auto *x = dynamic_cast<P::QualDeclContext *>(c))
       return decl(c, x->type(), x->ID(), x->expr(), x->qual->getType() == P::CONST);

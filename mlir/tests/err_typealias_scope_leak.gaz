@@ -1,0 +1,8 @@
+procedure main() returns integer {
+  {
+    typealias integer local;
+    local x = 1;
+  }
+  local y = 2;
+  return 0;
+}

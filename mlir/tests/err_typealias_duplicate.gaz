@@ -1,0 +1,4 @@
+typealias integer number;
+typealias real number;
+
+procedure main() returns integer { return 0; }

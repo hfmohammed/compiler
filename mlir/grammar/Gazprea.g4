@@ -11,7 +11,11 @@ grammar Gazprea;
   }
 }
 
-program : func* EOF ;
+program : topLevel* EOF ;
+
+topLevel : func | typeAliasDecl ;
+
+typeAliasDecl : TYPEALIAS type ID ';' ;
 
 func
   : kind=(FUNCTION | PROCEDURE) name=ID '(' (param (',' param)*)? ')'
@@ -23,10 +27,12 @@ param : qual=(CONST | VAR)? type ID? ;
 type
   : KW_INTEGER | KW_REAL | KW_BOOLEAN | KW_CHARACTER
   | KW_TUPLE '(' type (',' type)* ')'
+  | ID
   ;
 
 stmt
   : '{' stmt* '}'                                      # BlockStmt
+  | typeAliasDecl                                      # TypeAliasStmt
   | qual=(CONST | VAR) type? ID ('=' expr)? ';'        # QualDecl
   | type ID ('=' expr)? ';'                            # TypedDecl
   | IF '(' expr ')' thenS=stmt (ELSE elseS=stmt)?      # IfStmt
@@ -82,6 +88,7 @@ BREAK     : 'break' ;
 CONTINUE  : 'continue' ;
 CALL      : 'call' ;
 AS        : 'as' ;
+TYPEALIAS : 'typealias' ;
 TRUE      : 'true' ;
 FALSE     : 'false' ;
 NOT       : 'not' ;

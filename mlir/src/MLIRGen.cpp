@@ -651,6 +651,7 @@ private:
   void genStmt(const Stmt &s) {
     Location loc = b.getUnknownLoc();
     switch (s.kind) {
+    case Stmt::TypeAlias: return; // resolved and scoped while building the AST
     case Stmt::Block: genBlock(s.body); return;
     case Stmt::Decl: {
       if (scopes.back().count(s.name))

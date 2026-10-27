@@ -1,0 +1,9 @@
+typealias integer count;
+typealias count total;
+
+procedure main() returns integer {
+  total answer = 42;
+  answer -> std_output;
+  '\n' -> std_output;
+  return 0;
+}

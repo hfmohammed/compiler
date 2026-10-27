@@ -41,6 +41,8 @@ number and exit non-zero; runtime errors (e.g. division by zero) print
 - Types `integer` (i32), `real` (f32), `boolean`, `character`, and `tuple(...)`
   (nested, with `t.1` access, literals, `==`/`!=`, unpacking `a, b = t;`,
   implicit and explicit member-wise casts, tuple parameters and results)
+- Global and block-scoped `typealias` declarations, including aliases of aliases
+  and supported aggregate types, with lexical shadowing
 - `const`/`var` (a typed declaration with no qualifier is `const`), inferred
   declarations, `as<T>(e)` casts
 - Operators `or xor and == != < > <= >= + - * / % ^ not` with Gazprea precedence;
@@ -59,7 +61,7 @@ number and exit non-zero; runtime errors (e.g. division by zero) print
 ## Not yet implemented
 
 Structs, arrays/vectors/strings/matrices, generators and domain expressions,
-`by`/`||`/`**`, typealias, globals, `format`/`length`/`rows`/`columns`/`reverse`,
+`by`/`||`/`**`, globals, `format`/`length`/`rows`/`columns`/`reverse`,
 string values (string literals work only as stream output).
 
 ## Tests

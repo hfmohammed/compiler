@@ -45,7 +45,7 @@ struct Expr {
 
 struct Stmt {
   enum Kind { Decl, Assign, Unpack, Output, Input, If, Loop, Break, Continue,
-              Return, CallS, Block } kind;
+              Return, CallS, Block, TypeAlias } kind;
   int line = 0;
   std::string name;       // Decl / Assign / Input target, CallS callee
   int idx = 0;            // Assign / Input: 1-based tuple field (0 = whole variable)

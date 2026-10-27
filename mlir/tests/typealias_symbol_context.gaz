@@ -1,0 +1,8 @@
+typealias integer value;
+
+procedure main() returns integer {
+  value value = 9;
+  value -> std_output;
+  '\n' -> std_output;
+  return 0;
+}
