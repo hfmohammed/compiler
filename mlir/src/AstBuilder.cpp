@@ -27,6 +27,7 @@ public:
     aliases.emplace_back();
     for (auto *item : ctx->topLevel()) {
       if (item->typeAliasDecl()) defineAlias(item->typeAliasDecl());
+      else if (item->globalDecl()) p.globals.push_back(global(item->globalDecl()));
       else p.funcs.push_back(func(item->func()));
     }
     return p;
@@ -73,6 +74,18 @@ private:
       throw std::runtime_error("SymbolError on line " + std::to_string(lineOf(c)) +
                                ": type alias '" + name + "' already declared in this scope");
     scope[name] = std::move(target);
+  }
+
+  StmtP global(P::GlobalDeclContext *c) {
+    auto s = std::make_unique<Stmt>();
+    s->kind = Stmt::Decl;
+    s->line = lineOf(c);
+    s->name = c->ID()->getText();
+    s->isConst = !c->qual || c->qual->getType() == P::CONST;
+    if (c->type()) s->declType = type(c->type());
+    else s->hasType = false;
+    if (c->expr()) s->expr = expr(c->expr());
+    return s;
   }
 
   Func func(P::FuncContext *c) {

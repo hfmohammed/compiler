@@ -1,0 +1,4 @@
+function value() returns integer = 4;
+const RESULT = value();
+
+procedure main() returns integer { return 0; }

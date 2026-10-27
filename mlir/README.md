@@ -43,6 +43,8 @@ number and exit non-zero; runtime errors (e.g. division by zero) print
   implicit and explicit member-wise casts, tuple parameters and results)
 - Global and block-scoped `typealias` declarations, including aliases of aliases
   and supported aggregate types, with lexical shadowing
+- Dependency-ordered immutable globals with compile-time evaluation, type
+  inference, tuple values, casts, checked arithmetic, and local shadowing
 - `const`/`var` (a typed declaration with no qualifier is `const`), inferred
   declarations, `as<T>(e)` casts
 - Operators `or xor and == != < > <= >= + - * / % ^ not` with Gazprea precedence;
@@ -61,7 +63,7 @@ number and exit non-zero; runtime errors (e.g. division by zero) print
 ## Not yet implemented
 
 Structs, arrays/vectors/strings/matrices, generators and domain expressions,
-`by`/`||`/`**`, globals, `format`/`length`/`rows`/`columns`/`reverse`,
+`by`/`||`/`**`, `format`/`length`/`rows`/`columns`/`reverse`,
 string values (string literals work only as stream output).
 
 ## Tests

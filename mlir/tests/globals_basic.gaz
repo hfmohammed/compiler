@@ -1,0 +1,16 @@
+typealias tuple(integer, real) reading;
+
+const BASE = 10;
+const DOUBLE = BASE * 2;
+const real SCALE = DOUBLE;
+const reading SAMPLE = (DOUBLE, SCALE + 0.5);
+
+function global_value() returns integer = SAMPLE.1;
+
+procedure main() returns integer {
+  global_value() -> std_output;
+  '\n' -> std_output;
+  SAMPLE.2 -> std_output;
+  '\n' -> std_output;
+  return 0;
+}

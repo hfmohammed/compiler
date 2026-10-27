@@ -1,0 +1,6 @@
+const integer answer = 42;
+
+procedure main() returns integer {
+  answer = 0;
+  return 0;
+}

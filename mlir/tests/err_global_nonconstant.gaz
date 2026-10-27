@@ -1,0 +1,3 @@
+const state = stream_state(std_input);
+
+procedure main() returns integer { return 0; }

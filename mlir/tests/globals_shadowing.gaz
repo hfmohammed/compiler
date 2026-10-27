@@ -1,0 +1,8 @@
+const integer value = 3;
+
+procedure main() returns integer {
+  var integer value = 9;
+  value -> std_output;
+  '\n' -> std_output;
+  return 0;
+}

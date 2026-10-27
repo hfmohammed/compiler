@@ -80,6 +80,7 @@ struct Func {
 };
 
 struct Program {
+  std::vector<StmtP> globals;
   std::vector<Func> funcs;
 };
 

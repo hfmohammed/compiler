@@ -1,0 +1,4 @@
+const SECOND = FIRST + 1;
+const FIRST = 4;
+
+procedure main() returns integer { return 0; }

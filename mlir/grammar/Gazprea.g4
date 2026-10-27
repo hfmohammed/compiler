@@ -13,9 +13,14 @@ grammar Gazprea;
 
 program : topLevel* EOF ;
 
-topLevel : func | typeAliasDecl ;
+topLevel : func | typeAliasDecl | globalDecl ;
 
 typeAliasDecl : TYPEALIAS type ID ';' ;
+
+globalDecl
+  : qual=(CONST | VAR) type? ID ('=' expr)? ';'
+  | type ID ('=' expr)? ';'
+  ;
 
 func
   : kind=(FUNCTION | PROCEDURE) name=ID '(' (param (',' param)*)? ')'

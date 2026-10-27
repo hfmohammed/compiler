@@ -4,6 +4,9 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include <cmath>
+#include <cstdint>
+#include <limits>
 #include <stdexcept>
 #include <unordered_map>
 
@@ -47,6 +50,8 @@ public:
     b.setInsertionPointToEnd(module->getBody());
     declareRuntime();
 
+    for (auto &g : prog.globals) declareGlobal(*g);
+
     for (auto &f : prog.funcs) declare(f);
     for (auto &[name, fi] : funcs)
       if (!fi.defined)
@@ -70,6 +75,17 @@ private:
   mlir::OpBuilder b;
   mlir::OwningOpRef<mlir::ModuleOp> module;
   std::unordered_map<std::string, FuncInfo> funcs;
+
+  struct ConstLeaf {
+    Type type;
+    int64_t integer = 0;
+    double real = 0;
+  };
+  struct ConstVal {
+    Type type;
+    std::vector<ConstLeaf> leaves;
+  };
+  std::unordered_map<std::string, ConstVal> globals;
   std::vector<std::unordered_map<std::string, Var>> scopes;
   mlir::func::FuncOp curFn;
   Block *entry = nullptr;
@@ -143,6 +159,258 @@ private:
     }
     default: return "void";
     }
+  }
+
+  static ConstVal constScalar(Type t, int64_t integer, double real = 0) {
+    return {t, {{t, integer, real}}};
+  }
+  static ConstVal constElem(const ConstVal &value, size_t index) {
+    size_t offset = 0;
+    for (size_t i = 0; i < index; i++) offset += leafCount(value.type.elems[i]);
+    size_t count = leafCount(value.type.elems[index]);
+    return {value.type.elems[index],
+            std::vector<ConstLeaf>(value.leaves.begin() + offset,
+                                   value.leaves.begin() + offset + count)};
+  }
+
+  ConstVal coerceConst(int line, const ConstVal &value, const Type &to,
+                       const char *what) {
+    if (value.type == to) return value;
+    if (value.type.isTuple() && to.isTuple() &&
+        value.type.elems.size() == to.elems.size()) {
+      ConstVal result{to, {}};
+      for (size_t i = 0; i < to.elems.size(); i++) {
+        ConstVal part = coerceConst(line, constElem(value, i), to.elems[i], what);
+        result.leaves.insert(result.leaves.end(), part.leaves.begin(), part.leaves.end());
+      }
+      return result;
+    }
+    if (value.type == Type::Integer && to == Type::Real)
+      return constScalar(Type::Real, 0, static_cast<float>(value.leaves[0].integer));
+    throw err("TypeError", line, "cannot convert " + typeName(value.type) + " to " +
+                                    typeName(to) + " in " + what);
+  }
+
+  ConstVal castConst(int line, const ConstVal &value, const Type &to) {
+    if (value.type == to) return value;
+    if (value.type.isTuple() && to.isTuple() &&
+        value.type.elems.size() == to.elems.size()) {
+      ConstVal result{to, {}};
+      for (size_t i = 0; i < to.elems.size(); i++) {
+        ConstVal part = castConst(line, constElem(value, i), to.elems[i]);
+        result.leaves.insert(result.leaves.end(), part.leaves.begin(), part.leaves.end());
+      }
+      return result;
+    }
+    const ConstLeaf &leaf = value.leaves[0];
+    if (value.type == Type::Boolean) {
+      if (to == Type::Integer) return constScalar(to, leaf.integer != 0);
+      if (to == Type::Character) return constScalar(to, leaf.integer != 0);
+      if (to == Type::Real) return constScalar(to, 0, leaf.integer != 0 ? 1.0f : 0.0f);
+    }
+    if (value.type == Type::Character) {
+      uint8_t ch = static_cast<uint8_t>(leaf.integer);
+      if (to == Type::Integer) return constScalar(to, ch);
+      if (to == Type::Boolean) return constScalar(to, ch != 0);
+      if (to == Type::Real) return constScalar(to, 0, static_cast<float>(ch));
+    }
+    if (value.type == Type::Integer) {
+      int32_t integer = static_cast<int32_t>(leaf.integer);
+      if (to == Type::Real) return constScalar(to, 0, static_cast<float>(integer));
+      if (to == Type::Boolean) return constScalar(to, integer != 0);
+      if (to == Type::Character) return constScalar(to, static_cast<uint8_t>(integer));
+    }
+    if (value.type == Type::Real && to == Type::Integer) {
+      if (!std::isfinite(leaf.real) || leaf.real < std::numeric_limits<int32_t>::min() ||
+          leaf.real > std::numeric_limits<int32_t>::max())
+        throw err("MathError", line, "real-to-integer cast is out of range");
+      return constScalar(to, static_cast<int32_t>(leaf.real));
+    }
+    throw err("TypeError", line,
+              "cannot cast " + typeName(value.type) + " to " + typeName(to));
+  }
+
+  int32_t checkedConstInt(int line, int64_t value) {
+    if (value < std::numeric_limits<int32_t>::min() ||
+        value > std::numeric_limits<int32_t>::max())
+      throw err("MathError", line, "integer overflow in global initializer");
+    return static_cast<int32_t>(value);
+  }
+
+  bool constEqual(int line, ConstVal left, ConstVal right) {
+    if (left.type.isTuple() || right.type.isTuple()) {
+      if (!(left.type.isTuple() && right.type.isTuple()) ||
+          left.type.elems.size() != right.type.elems.size())
+        throw err("TypeError", line, "cannot compare " + typeName(left.type) + " with " +
+                                         typeName(right.type));
+      for (size_t i = 0; i < left.type.elems.size(); i++)
+        if (!constEqual(line, constElem(left, i), constElem(right, i))) return false;
+      return true;
+    }
+    if (left.type != right.type) {
+      if (left.type == Type::Integer && right.type == Type::Real)
+        left = coerceConst(line, left, Type::Real, "comparison");
+      else if (left.type == Type::Real && right.type == Type::Integer)
+        right = coerceConst(line, right, Type::Real, "comparison");
+      else
+        throw err("TypeError", line, "cannot compare " + typeName(left.type) + " with " +
+                                         typeName(right.type));
+    }
+    if (left.type == Type::Real) return left.leaves[0].real == right.leaves[0].real;
+    return left.leaves[0].integer == right.leaves[0].integer;
+  }
+
+  ConstVal evalConst(const Expr &expr) {
+    switch (expr.kind) {
+    case Expr::IntLit: {
+      long long value = std::stoll(expr.text);
+      if (value > std::numeric_limits<int32_t>::max())
+        throw err("LiteralError", expr.line, "integer literal does not fit in 32 bits");
+      return constScalar(Type::Integer, value);
+    }
+    case Expr::RealLit: {
+      try {
+        return constScalar(Type::Real, 0, std::stof(expr.text));
+      } catch (std::out_of_range &) {
+        throw err("LiteralError", expr.line, "real literal does not fit in 32 bits");
+      }
+    }
+    case Expr::BoolLit: return constScalar(Type::Boolean, expr.text == "true");
+    case Expr::CharLit:
+      return constScalar(Type::Character, static_cast<unsigned char>(expr.text[0]));
+    case Expr::Var: {
+      auto it = globals.find(expr.text);
+      if (it == globals.end())
+        throw err("SymbolError", expr.line,
+                  "global initializer references undefined symbol '" + expr.text + "'");
+      return it->second;
+    }
+    case Expr::TupleAccess: {
+      auto it = globals.find(expr.text);
+      if (it == globals.end())
+        throw err("SymbolError", expr.line,
+                  "global initializer references undefined symbol '" + expr.text + "'");
+      if (!it->second.type.isTuple())
+        throw err("TypeError", expr.line, "'" + expr.text + "' is not a tuple");
+      if (expr.idx < 1 || static_cast<size_t>(expr.idx) > it->second.type.elems.size())
+        throw err("IndexError", expr.line, "tuple field index is out of range");
+      return constElem(it->second, expr.idx - 1);
+    }
+    case Expr::TupleLit: {
+      std::vector<Type> types;
+      ConstVal result;
+      for (auto &arg : expr.args) {
+        ConstVal value = evalConst(*arg);
+        types.push_back(value.type);
+        result.leaves.insert(result.leaves.end(), value.leaves.begin(), value.leaves.end());
+      }
+      result.type = Type::tuple(std::move(types));
+      return result;
+    }
+    case Expr::Cast: return castConst(expr.line, evalConst(*expr.args[0]), expr.castTo);
+    case Expr::Unary: {
+      ConstVal value = evalConst(*expr.args[0]);
+      if (expr.text == "not") {
+        if (value.type != Type::Boolean)
+          throw err("TypeError", expr.line, "'not' needs a boolean");
+        return constScalar(Type::Boolean, !value.leaves[0].integer);
+      }
+      if (!value.type.isNumeric())
+        throw err("TypeError", expr.line, "unary '" + expr.text + "' needs a number");
+      if (expr.text == "+") return value;
+      if (value.type == Type::Real)
+        return constScalar(Type::Real, 0, static_cast<float>(-value.leaves[0].real));
+      return constScalar(Type::Integer,
+                         checkedConstInt(expr.line, -value.leaves[0].integer));
+    }
+    case Expr::Binary: return evalConstBinary(expr);
+    case Expr::StrLit:
+      throw err("TypeError", expr.line, "string values are not yet supported");
+    case Expr::StreamState:
+    case Expr::Call:
+      throw err("GlobalError", expr.line,
+                "global initializer is not a constant expression");
+    }
+    throw err("GlobalError", expr.line, "unsupported global initializer");
+  }
+
+  ConstVal evalConstBinary(const Expr &expr) {
+    ConstVal left = evalConst(*expr.args[0]);
+    ConstVal right = evalConst(*expr.args[1]);
+    const std::string &op = expr.text;
+
+    if (op == "and" || op == "or" || op == "xor") {
+      if (left.type != Type::Boolean || right.type != Type::Boolean)
+        throw err("TypeError", expr.line, "'" + op + "' needs boolean operands");
+      bool a = left.leaves[0].integer != 0;
+      bool b = right.leaves[0].integer != 0;
+      return constScalar(Type::Boolean,
+                         op == "and" ? a && b : op == "or" ? a || b : a != b);
+    }
+    if (op == "==" || op == "!=") {
+      bool equal = constEqual(expr.line, left, right);
+      return constScalar(Type::Boolean, op == "==" ? equal : !equal);
+    }
+    if (!left.type.isNumeric() || !right.type.isNumeric())
+      throw err("TypeError", expr.line, "operator '" + op + "' needs numeric operands");
+
+    bool real = left.type == Type::Real || right.type == Type::Real;
+    if (real) {
+      left = coerceConst(expr.line, left, Type::Real, "expression");
+      right = coerceConst(expr.line, right, Type::Real, "expression");
+      float a = static_cast<float>(left.leaves[0].real);
+      float b = static_cast<float>(right.leaves[0].real);
+      if (op == "<" || op == ">" || op == "<=" || op == ">=")
+        return constScalar(Type::Boolean,
+                           op == "<" ? a < b : op == ">" ? a > b : op == "<=" ? a <= b : a >= b);
+      if (op == "+") return constScalar(Type::Real, 0, a + b);
+      if (op == "-") return constScalar(Type::Real, 0, a - b);
+      if (op == "*") return constScalar(Type::Real, 0, a * b);
+      if (op == "/") return constScalar(Type::Real, 0, a / b);
+      if (op == "%") return constScalar(Type::Real, 0, std::fmod(a, b));
+      if (op == "^") return constScalar(Type::Real, 0, std::pow(a, b));
+    } else {
+      int32_t a = static_cast<int32_t>(left.leaves[0].integer);
+      int32_t b = static_cast<int32_t>(right.leaves[0].integer);
+      if (op == "<" || op == ">" || op == "<=" || op == ">=")
+        return constScalar(Type::Boolean,
+                           op == "<" ? a < b : op == ">" ? a > b : op == "<=" ? a <= b : a >= b);
+      if (op == "+") return constScalar(Type::Integer, checkedConstInt(expr.line, int64_t(a) + b));
+      if (op == "-") return constScalar(Type::Integer, checkedConstInt(expr.line, int64_t(a) - b));
+      if (op == "*") return constScalar(Type::Integer, checkedConstInt(expr.line, int64_t(a) * b));
+      if (op == "/" || op == "%") {
+        if (b == 0) throw err("MathError", expr.line, op == "/" ? "division by zero" : "modulo by zero");
+        if (a == std::numeric_limits<int32_t>::min() && b == -1)
+          throw err("MathError", expr.line, "integer overflow in global initializer");
+        return constScalar(Type::Integer, op == "/" ? a / b : a % b);
+      }
+      if (op == "^") {
+        if (a == 0 && b <= 0)
+          throw err("MathError", expr.line, "zero raised to a non-positive power");
+        if (b < 0) {
+          if (a == 1) return constScalar(Type::Integer, 1);
+          if (a == -1) return constScalar(Type::Integer, b % 2 ? -1 : 1);
+          return constScalar(Type::Integer, 0);
+        }
+        int32_t result = 1;
+        for (int32_t exponent = 0; exponent < b; exponent++)
+          result = checkedConstInt(expr.line, int64_t(result) * a);
+        return constScalar(Type::Integer, result);
+      }
+    }
+    throw err("TypeError", expr.line, "unknown operator '" + op + "'");
+  }
+
+  void declareGlobal(const Stmt &decl) {
+    if (!decl.isConst)
+      throw err("GlobalError", decl.line, "global variables must be const");
+    if (!decl.expr)
+      throw err("GlobalError", decl.line, "global variables must have an initializer");
+    if (globals.count(decl.name))
+      throw err("SymbolError", decl.line, "global '" + decl.name + "' already declared");
+    ConstVal value = evalConst(*decl.expr);
+    Type type = decl.hasType ? decl.declType : value.type;
+    globals[decl.name] = coerceConst(decl.line, value, type, "global declaration");
   }
   // flattened mlir types of a value / of a by-reference parameter
   std::vector<mlir::Type> valueTypes(const Type &t) {
@@ -228,6 +496,17 @@ private:
     std::vector<Value> ls;
     for (auto &l : leavesOf(t)) ls.push_back(zeroLeaf(loc, l));
     return fromLeaves(t, ls);
+  }
+  Val materializeConst(Location loc, const ConstVal &value) {
+    std::vector<Value> leaves;
+    for (const ConstLeaf &leaf : value.leaves) {
+      if (leaf.type == Type::Real)
+        leaves.push_back(mlir::arith::ConstantOp::create(
+            b, loc, b.getF32FloatAttr(static_cast<float>(leaf.real))));
+      else
+        leaves.push_back(constInt(loc, mlirScalar(leaf.type), leaf.integer));
+    }
+    return fromLeaves(value.type, leaves);
   }
 
   // Implicit conversion: integer -> real, applied member-wise to tuples.
@@ -336,7 +615,13 @@ private:
     std::string key; // "t" or "t.2", for aliasing checks
   };
   LV resolveLV(const std::string &name, int idx, int line) {
-    Var &v = need(name, line);
+    Var *found = lookup(name);
+    if (!found) {
+      if (globals.count(name))
+        throw err("AssignError", line, "global '" + name + "' is const");
+      throw err("SymbolError", line, "undefined variable '" + name + "'");
+    }
+    Var &v = *found;
     if (idx == 0) return {v.mems, v.type, v.isConst, name};
     if (!v.type.isTuple())
       throw err("TypeError", line, "'" + name + "' is not a tuple");
@@ -379,10 +664,22 @@ private:
     case Expr::CharLit:
       return scalar(constInt(loc, b.getI8Type(), (unsigned char)e.text[0]), Type::Character);
     case Expr::Var: {
-      Var &v = need(e.text, e.line);
-      return load(loc, v.mems, v.type);
+      if (Var *v = lookup(e.text)) return load(loc, v->mems, v->type);
+      auto global = globals.find(e.text);
+      if (global != globals.end()) return materializeConst(loc, global->second);
+      throw err("SymbolError", e.line, "undefined variable '" + e.text + "'");
     }
     case Expr::TupleAccess: {
+      if (!lookup(e.text)) {
+        auto global = globals.find(e.text);
+        if (global == globals.end())
+          throw err("SymbolError", e.line, "undefined variable '" + e.text + "'");
+        if (!global->second.type.isTuple())
+          throw err("TypeError", e.line, "'" + e.text + "' is not a tuple");
+        if (e.idx < 1 || static_cast<size_t>(e.idx) > global->second.type.elems.size())
+          throw err("IndexError", e.line, "tuple field index is out of range");
+        return materializeConst(loc, constElem(global->second, e.idx - 1));
+      }
       LV lv = resolveLV(e.text, e.idx, e.line);
       return load(loc, lv.mems, lv.type);
     }

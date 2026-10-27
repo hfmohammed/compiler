@@ -1,0 +1,13 @@
+const integer ARITH = (2 + 3) * 4 ^ 2 / 8;
+const boolean LOGIC = ARITH == 10 and not false;
+const character LETTER = as<character>(65);
+
+procedure main() returns integer {
+  ARITH -> std_output;
+  '\n' -> std_output;
+  LOGIC -> std_output;
+  '\n' -> std_output;
+  LETTER -> std_output;
+  '\n' -> std_output;
+  return 0;
+}
