@@ -58,7 +58,8 @@ number and exit non-zero; runtime errors (e.g. division by zero) print
   `stream_state(std_input)`
 - Spec error names: `SyntaxError SymbolError TypeError AssignError MainError
   ReturnError StatementError CallError DefinitionError AliasingError
-  LiteralError IndexError MathError`, reported as `Name on line N: message`
+  LiteralError IndexError MathError GlobalError`, reported as
+  `Name on line N: message`
 
 ## Not yet implemented
 
@@ -68,7 +69,8 @@ string values (string literals work only as stream output).
 
 ## Tests
 
-`tests/run_tests.sh` builds and runs every `tests/*.gaz` that has a `.out` file.
+`tests/run_tests.sh` builds and runs all 240 `tests/*.gaz` programs and checks
+that the LLVM O2 pipeline actually folds a dedicated arithmetic workload.
 Every native test build passes `-O2` through both the compiler's LLVM pipeline
 and the final Clang link, as required by the language specification.
 

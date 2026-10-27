@@ -1,132 +1,153 @@
-# Gazprea ARM64 Code Generator
+# Gazprea Compiler
 
-This project implements the code generation backend for a Gazprea style programming language. It takes an abstract syntax tree produced by the parser and emits ARM64 (AArch64) assembly. The design focuses on correctness, explicit stack management, and clear control flow rather than aggressive optimization.
+A native-code compiler for the Gazprea programming language, built in modern
+C++ on ANTLR, MLIR, and LLVM. The primary compiler implements a generated
+frontend, typed AST, semantic analysis, multi-dialect MLIR generation, LLVM
+lowering, runtime support, and an executable test harness.
 
-The generator supports expressions, scoped variables, control flow, loops, functions, procedures, and function calls following the ARM64 calling convention.
+The implementation follows the official
+[CMPUT 415 Gazprea specification](https://cmput415.github.io/415-docs/gazprea/).
 
-## Overview
+## Compiler pipeline
 
-The compilation pipeline is structured as follows:
+```text
+Gazprea source
+    ↓
+ANTLR 4.13.2 lexer and parser
+    ↓
+Typed AST and semantic checks
+    ↓
+MLIR: func + arith + cf + memref
+    ↓
+5 LLVM dialect conversion passes
+    ↓
+LLVM IR and optional LLVM -O2 pipeline
+    ↓
+Clang + Gazprea runtime
+    ↓
+Native executable
+```
 
-Source Code -> Tokenizer -> Parser -> AST -> Code Generator -> ARM64 Assembly -> Native Binary
+## Highlights
 
-The generated assembly is written to `output.s`.
+- Generates native executables through MLIR and LLVM IR
+- Runs LLVM's standard per-module `-O2` optimization pipeline
+- Uses an ANTLR 4.13.2 grammar with generated C++ lexer and parser
+- Supports integer, real, boolean, character, and nested tuple types
+- Implements tuple literals, access, assignment, equality, unpacking, casts,
+  parameters, and multi-value returns
+- Supports global and block-scoped type aliases with alias chaining and lexical
+  shadowing
+- Evaluates immutable globals at compile time in dependency order, including
+  inferred types, tuple values, casts, comparisons, and checked arithmetic
+- Implements functions, procedures, prototypes, by-reference `var` parameters,
+  and compile-time aliasing checks
+- Supports conditional, pre-test, post-test, infinite, and integer-range loops
+- Enforces function purity, procedure call-position rules, const correctness,
+  return-path coverage, and the Gazprea `main` contract
+- Implements typed stream I/O and spec-compliant `stream_state(std_input)`
+- Detects integer overflow, division by zero, invalid powers, invalid literals,
+  and other runtime failures with named Gazprea errors
 
-## Features
+## Validation
 
-* Two pass code generation for accurate stack sizing
-* Stack based allocation for locals and temporaries
-* Lexical scoping with shadowing
-* Functions and procedures with parameters
-* Function calls using ARM64 argument registers
-* Safe handling of nested function calls
-* Control flow including if, else, loops, break, and continue
-* ARM64 compliant stack frames and alignment
+The compiler is covered by **240 executable Gazprea programs**. Every positive
+test is compiled to LLVM IR with `-O2`, linked to a native executable, run with
+an optional input fixture, and checked against exact stdout, stderr, and exit
+code expectations.
 
-## Two Pass Code Generation
+| Suite | Coverage |
+|---|---|
+| Language | Operators, casts, scopes, control flow, calls, tuples, aliases, globals, and I/O |
+| Compile errors | 147 programs covering syntax, types, symbols, assignments, calls, returns, aliases, globals, and indexing |
+| Runtime errors | 14 programs covering overflow, division, modulo, and invalid powers |
+| Memory | 4 stress programs covering deep recursion, many locals, nested blocks, and loop allocation |
+| Performance | 6 compute-heavy programs with independently checked outputs and 20-second timeouts |
+| Edge cases | Integer boundaries, negative powers, floating-point infinity, and NaN |
 
-Each function and the main program are generated using two passes.
+The harness also inspects optimized LLVM IR to ensure `-O2` performs real
+constant folding instead of being accepted as a no-op.
 
-### Pass One: Frame Size Calculation
+## Build
 
-In the first pass, no assembly is emitted. The generator walks the AST and tracks local variable usage and temporary stack usage during expression evaluation. This pass determines the total stack frame size needed. The final frame size is aligned to 16 bytes as required by the ARM64 ABI.
+Requirements:
 
-### Pass Two: Assembly Emission
+- CMake 3.20 or newer
+- A matching LLVM and MLIR installation
+- A C++17 compiler
+- Java, used by the ANTLR code generator
 
-In the second pass, the generator emits the function prologue, parameter storage, body instructions, and function epilogue. This ensures all stack accesses are valid and correctly aligned.
+On macOS with Homebrew LLVM:
 
-## Stack Frame Layout
+```bash
+LLVM_PREFIX=/opt/homebrew/opt/llvm
 
-Each function uses a fixed stack frame with a frame pointer stored in x29.
+cmake -S mlir -B mlir/build \
+  -DMLIR_DIR="$LLVM_PREFIX/lib/cmake/mlir" \
+  -DLLVM_DIR="$LLVM_PREFIX/lib/cmake/llvm" \
+  -DCMAKE_CXX_COMPILER="$LLVM_PREFIX/bin/clang++"
 
-The frame layout is:
+cmake --build mlir/build -j
+```
 
-* &emsp; Saved frame pointer and return address
-* &emsp; Local variables and parameters
-* &emsp; Temporary values used during expression evaluation
+CMake downloads the ANTLR 4.13.2 tool and C++ runtime during the first
+configuration.
 
-All variables are accessed using fixed offsets from the frame pointer.
+## Use
 
-## Function Parameters
+Emit high-level MLIR:
 
-### Calling Convention
+```bash
+mlir/build/gazc --emit-mlir program.gaz
+```
 
-The first eight integer or pointer arguments are passed in registers x0 through x7.
+Emit LLVM IR:
 
-### Parameter Storage
+```bash
+mlir/build/gazc --emit-llvm program.gaz -o program.ll
+```
 
-On function entry, each parameter is assigned a stack slot and the incoming register value is stored into that slot. After this step, parameters behave exactly like local variables.
+Emit LLVM IR after the standard O2 pipeline:
 
-### Parameter Access
+```bash
+mlir/build/gazc -O2 --emit-llvm program.gaz -o program.ll
+```
 
-When a parameter is referenced, it is loaded from its stack slot using its frame pointer relative offset. This unifies parameter and local variable access.
+Compile and run a native executable:
 
-## Function Calls
+```bash
+mlir/scripts/gazrun.sh program.gaz program
+./program
+```
 
-Arguments are evaluated from left to right. To safely support nested function calls, arguments are temporarily spilled to the stack before the call. After all arguments are evaluated, they are reloaded into x0 through x7 and the function is called. This prevents nested calls from overwriting argument registers.
+Run the complete suite:
 
-## Functions and Procedures
+```bash
+mlir/tests/run_tests.sh
+```
 
-The generator distinguishes between two kinds of routines.
+## Repository layout
 
-Functions return a value in x0 and must explicitly return or use an expression body.
+```text
+mlir/
+├── grammar/Gazprea.g4   ANTLR grammar
+├── include/             AST, lowering, and compiler interfaces
+├── src/AstBuilder.cpp   Parse-tree to typed AST conversion
+├── src/MLIRGen.cpp      Semantic analysis and MLIR generation
+├── src/Lowering.cpp     MLIR-to-LLVM lowering and optimization
+├── runtime/runtime.c    I/O and checked arithmetic runtime
+├── scripts/gazrun.sh    Native compilation driver
+└── tests/               240 executable language programs
+```
 
-Procedures do not return a value. They may omit a return statement. If no return is encountered, the generator automatically emits a function epilogue.
+The repository root also retains the earlier direct ARM64 backend as a compact
+record of the project's evolution. The MLIR implementation is the primary and
+most complete compiler.
 
-## Control Flow
+## Current scope
 
-Supported control flow constructs include:
-* if, else if, else
-* while loops
-* post predicated loops
-* infinite loops
-* break and continue
-
-Each loop maintains its own label context to ensure correct jump targets.
-
-## Build System
-
-This project uses a Makefile to drive the full compiler pipeline.
-
-The Makefile performs the following steps:
-
-1. Compiles the compiler implementation
-2. Runs the compiler on a Gazprea source file
-3. Generates ARM64 assembly in `output.s`
-4. Assembles and links the generated assembly
-5. Executes the resulting binary
-
-### Makefile Targets
-
-* `make` or `make run` Builds the compiler, runs it on the test input, assembles the output, and executes the program
-* `make compile` Compiles the compiler source into an executable
-* `make link` Runs the compiler on the test Gazprea file to produce `output.s`
-* `make run_asm` Assembles and runs an existing `output.s` file without recompiling the compiler
-* `make clean` Removes generated binaries
-
-The Makefile is intended for rapid iteration and debugging during compiler development.
-
-## Files
-* `src/tokenization.hpp` Token definitions and lexical utilities
-* `src/parser.hpp` AST definitions and parsing logic
-* `src/generator.hpp` ARM64 code generation backend
-* `src/main.cpp` Compiler entry point
-* `src/example.gaz` Example and test file
-* `Makefile` Build and execution automation
-* `grammar.md` defines grammar
-
-## Documentation
-* 📘 [Language Grammar](grammar.md)
-* 🧠 Parser & AST Design (coming soon)
-
-## Limitations and Future Work
-
-* Support for more than eight function arguments
-* Struct layout and member access
-* Type driven code generation
-* Register allocation beyond scratch registers
-* Optimization passes such as constant folding and dead code elimination
-
-## Summary
-
-This project implements a clear and explicit ARM64 code generator with proper stack discipline, function handling, and control flow. It is designed to be easy to debug and extend, making it a solid foundation for further compiler development.
+The compiler currently does not implement structs, arrays, vectors, strings as
+first-class values, matrices, generators, domain expressions, or the
+`length`/`rows`/`columns`/`reverse`/`format` built-ins. String literals are
+supported for stream output. These limitations are explicit so unsupported
+programs are not presented as working language coverage.

@@ -34,6 +34,19 @@ for src in "$ROOT"/tests/*.gaz; do
   if cmp -s "$TMP/out" "$exp"; then echo "ok   $name"; pass=$((pass+1))
   else echo "FAIL $name"; diff "$TMP/out" "$exp" | head -5; fail=$((fail+1)); fi
 done
+
+# Prove that -O2 reaches LLVM rather than being accepted as a no-op. The
+# dedicated program starts with variable-backed arithmetic that the default O2
+# pipeline must fold before IR emission.
+if "$ROOT/build/gazc" -O2 --emit-llvm "$ROOT/tests/o2_pipeline.gaz" \
+    -o "$TMP/o2_pipeline.ll" 2>"$TMP/err" && \
+    ! grep -Eq ' (add|mul) i32 ' "$TMP/o2_pipeline.ll"; then
+  echo "ok   o2_ir_pipeline"
+else
+  echo "FAIL o2_ir_pipeline (-O2 did not fold integer arithmetic)"
+  fail=$((fail+1))
+fi
+
 rm -rf "$TMP"
 echo "$pass passed, $fail failed"
 [ $fail -eq 0 ]
