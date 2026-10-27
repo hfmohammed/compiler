@@ -7,6 +7,8 @@
 #include "mlir/Pass/Pass.h"
 #include "mlir/Pass/PassManager.h"
 #include "llvm/IR/Module.h"
+#include "llvm/Passes/OptimizationLevel.h"
+#include "llvm/Passes/PassBuilder.h"
 #include "mlir/Target/LLVMIR/Dialect/Builtin/BuiltinToLLVMIRTranslation.h"
 #include "mlir/Target/LLVMIR/Dialect/LLVMIR/LLVMToLLVMIRTranslation.h"
 #include "mlir/Target/LLVMIR/Export.h"
@@ -28,6 +30,24 @@ std::unique_ptr<llvm::Module> translateToLLVMIR(mlir::ModuleOp module,
   mlir::registerBuiltinDialectTranslation(*module.getContext());
   mlir::registerLLVMDialectTranslation(*module.getContext());
   return mlir::translateModuleToLLVMIR(module, llvmCtx, "gazprea");
+}
+
+void optimizeLLVMModule(llvm::Module &module) {
+  llvm::LoopAnalysisManager lam;
+  llvm::FunctionAnalysisManager fam;
+  llvm::CGSCCAnalysisManager cgam;
+  llvm::ModuleAnalysisManager mam;
+  llvm::PassBuilder pb;
+
+  pb.registerModuleAnalyses(mam);
+  pb.registerCGSCCAnalyses(cgam);
+  pb.registerFunctionAnalyses(fam);
+  pb.registerLoopAnalyses(lam);
+  pb.crossRegisterProxies(lam, fam, cgam, mam);
+
+  llvm::ModulePassManager mpm =
+      pb.buildPerModuleDefaultPipeline(llvm::OptimizationLevel::O2);
+  mpm.run(module, mam);
 }
 
 } // namespace gaz

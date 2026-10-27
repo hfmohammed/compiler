@@ -15,16 +15,19 @@
 #include <sstream>
 
 static void usage() {
-  std::cerr << "usage: gazc [--emit-mlir | --emit-llvm] <input.gaz> [-o <output>]\n"
+  std::cerr << "usage: gazc [-O2] [--emit-mlir | --emit-llvm] <input.gaz> [-o <output>]\n"
+               "  -O2           run LLVM's O2 optimization pipeline\n"
                "  --emit-mlir   print the high-level MLIR (before lowering)\n"
                "  --emit-llvm   print LLVM IR (default)\n";
 }
 
 int main(int argc, char **argv) {
   enum { Mlir, Llvm } mode = Llvm;
+  bool optimize = false;
   const char *input = nullptr, *output = nullptr;
   for (int i = 1; i < argc; i++) {
-    if (!strcmp(argv[i], "--emit-mlir")) mode = Mlir;
+    if (!strcmp(argv[i], "-O2")) optimize = true;
+    else if (!strcmp(argv[i], "--emit-mlir")) mode = Mlir;
     else if (!strcmp(argv[i], "--emit-llvm")) mode = Llvm;
     else if (!strcmp(argv[i], "-o") && i + 1 < argc) output = argv[++i];
     else if (argv[i][0] != '-' && !input) input = argv[i];
@@ -70,6 +73,7 @@ int main(int argc, char **argv) {
       std::cerr << "gazc: LLVM IR translation failed\n";
       return 3;
     }
+    if (optimize) gaz::optimizeLLVMModule(*llvmModule);
     llvmModule->print(fileOut, nullptr);
   } catch (std::exception &e) {
     std::cerr << e.what() << "\n";

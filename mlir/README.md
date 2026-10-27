@@ -24,8 +24,9 @@ cmake --build build
 ## Use
 
 ```
-build/gazc --emit-mlir prog.gaz          # high-level MLIR
-build/gazc --emit-llvm prog.gaz -o p.ll  # LLVM IR (default)
+build/gazc --emit-mlir prog.gaz             # high-level MLIR
+build/gazc --emit-llvm prog.gaz -o p.ll     # LLVM IR (default)
+build/gazc -O2 --emit-llvm prog.gaz -o p.ll # LLVM-optimized IR
 scripts/gazrun.sh prog.gaz prog && ./prog
 tests/run_tests.sh
 ```
@@ -59,11 +60,13 @@ number and exit non-zero; runtime errors (e.g. division by zero) print
 
 Structs, arrays/vectors/strings/matrices, generators and domain expressions,
 `by`/`||`/`**`, typealias, globals, `format`/`length`/`rows`/`columns`/`reverse`,
-string values (string literals work only as stream output), `-O2` flag handling.
+string values (string literals work only as stream output).
 
 ## Tests
 
 `tests/run_tests.sh` builds and runs every `tests/*.gaz` that has a `.out` file.
+Every native test build passes `-O2` through both the compiler's LLVM pipeline
+and the final Clang link, as required by the language specification.
 
 | Prefix | What it checks |
 |---|---|
